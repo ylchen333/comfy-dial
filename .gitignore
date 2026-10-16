@@ -9,3 +9,5 @@ __pycache__/
 !.env.example
 outputs/
 *.tsbuildinfo
+.claude/worktrees/
+.history/
