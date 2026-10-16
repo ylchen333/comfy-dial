@@ -1,0 +1,15 @@
+{
+  "candidateId": "fx_push_in-take-0",
+  "solveOk": true,
+  "mode": "full",
+  "rotErrDeg": 1.2,
+  "transErrPct": 4.5,
+  "fovErrDeg": 0.6,
+  "perSegment": [
+    { "start": 0, "end": 40, "rotErrDeg": 0.8, "transErrPct": 3.1, "fovErrDeg": 0.4, "pass": true },
+    { "start": 40, "end": 80, "rotErrDeg": 1.1, "transErrPct": 4.0, "fovErrDeg": 0.5, "pass": true },
+    { "start": 80, "end": 121, "rotErrDeg": 1.7, "transErrPct": 6.4, "fovErrDeg": 0.9, "pass": true }
+  ],
+  "composite": 0.42,
+  "pass": true
+}

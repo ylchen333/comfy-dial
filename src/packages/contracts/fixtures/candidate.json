@@ -1,0 +1,9 @@
+{
+  "id": "fx_push_in-take-0",
+  "shotId": "fx_push_in",
+  "seed": 1234,
+  "idempotencyKey": "fx_push_in:1234:v1",
+  "jobId": "job_0001",
+  "status": "succeeded",
+  "video": "takes/fx_push_in/take-0.mp4"
+}

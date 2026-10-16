@@ -1,0 +1,11 @@
+{
+  "name": "@comfy-osh/server",
+  "private": true,
+  "type": "module",
+  "exports": { ".": "./src/index.ts" },
+  "scripts": {
+    "typecheck": "tsc -p tsconfig.json",
+    "test": "tsc -p tsconfig.json && vitest run --passWithNoTests"
+  },
+  "dependencies": { "@comfy-osh/contracts": "workspace:*" }
+}

@@ -1,0 +1,17 @@
+{
+  "contract": "ControlPacket",
+  "why": "strength is 0..1",
+  "data": {
+    "shotId": "fx_push_in",
+    "depthVideo": "renders/fx_push_in/depth.mp4",
+    "depthNormalization": {
+      "mode": "fixed",
+      "near": 0.1,
+      "far": 20
+    },
+    "iclora": {
+      "name": "ltx-2.3-22b-ic-lora-union-control-ref0.5",
+      "strength": 1.5
+    }
+  }
+}

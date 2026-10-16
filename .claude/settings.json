@@ -1,0 +1,12 @@
+{
+  "worktree": { "baseRef": "head" },
+  "hooks": {
+    "Stop": [
+      {
+        "hooks": [
+          { "type": "command", "command": "\"$CLAUDE_PROJECT_DIR\"/.claude/hooks/stop-tests.sh", "timeout": 300 }
+        ]
+      }
+    ]
+  }
+}

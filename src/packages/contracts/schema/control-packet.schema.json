@@ -1,0 +1,33 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://comfy-osh.dev/schema/control-packet.schema.json",
+  "title": "ControlPacket",
+  "description": "What the GENERATE step needs besides the prompt. Rule enforced by mirrors: depthNormalization.far > near.",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["shotId", "depthVideo", "depthNormalization", "iclora"],
+  "properties": {
+    "shotId": { "$ref": "common.schema.json#/$defs/nonEmptyString" },
+    "depthVideo": { "description": "URI or path of the rendered depth.mp4.", "$ref": "common.schema.json#/$defs/nonEmptyString" },
+    "depthNormalization": {
+      "description": "Fixed for the whole clip, never per frame (SPEC 4.1).",
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["mode", "near", "far"],
+      "properties": {
+        "mode": { "const": "fixed" },
+        "near": { "type": "number", "exclusiveMinimum": 0 },
+        "far": { "type": "number", "exclusiveMinimum": 0 }
+      }
+    },
+    "iclora": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["name", "strength"],
+      "properties": {
+        "name": { "$ref": "common.schema.json#/$defs/nonEmptyString" },
+        "strength": { "description": "attention_strength.", "type": "number", "minimum": 0, "maximum": 1 }
+      }
+    }
+  }
+}

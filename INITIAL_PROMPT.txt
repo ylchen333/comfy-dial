@@ -1,0 +1,82 @@
+You are the lead engineer for Comfy-OSH. Read SPEC.md and SKILLS.md in this folder before doing anything. SPEC.md is the source of truth. If anything below conflicts with it, SPEC.md wins.
+
+GOAL
+Build the closed-loop camera director in SPEC.md: author a camera in 3D → LTX generates N takes → measure each take's recovered camera against the authored path → rank → regenerate only failing segments. Deadline: submit Thu Oct 29 (hard cutoff Fri Oct 30, 9am PT).
+
+WORKING STYLE (put these rules in the repo's CLAUDE.md too)
+1. Start every reply with the deliverable (path, command, diff, or result). No intro.
+2. Max 3 options per decision, as a table: Option | Pros | Cons | Cognitive Overhead.
+3. Show only diffs or new modules. Never rewrite unchanged code.
+4. Fix the blocker first. Put refactors in a 2-line "Parking Lot" at the bottom.
+5. Show "Step X of Y" at the top. Never list more than 5 tasks at once.
+6. End with exactly one action I can do or verify in under 2 minutes.
+No pleasantries, no trailing questions.
+
+COMFY DEVELOPMENT
+Install comfy-cli and read its build skill:
+
+`pip install -U comfy-cli`, then `comfy skills show comfy-build`.
+
+It covers packaging a local ComfyUI install — models, custom nodes, dependency pins — into a build on platform.comfy.org and cutting a release. `comfy skills show comfy-deploy` covers running that release as a serverless endpoint.
+
+HARD RULES
+- Only the main session edits src/packages/contracts/. Lanes ask the main session for contract changes.
+- Each lane edits only the directories it owns (table below).
+- Licences: follow SKILLS.md §4. No evo, CoTracker3, SpatialTracker v2, DA3 Large/Giant, CozyClay code, or partner nodes/APIs. Repo licence is MIT.
+- Secrets live in src/.env only (COMFY_API_KEY, COMFY_BASE_URL). Never commit them. Add .env.example.
+- No Parking Lot features from SPEC.md §2 unless I say so.
+- A task is done only when its tests pass. Verifier changes are done only when the golden test passes.
+
+────────────────────────────────────────
+PHASE 0 — you, sequential (Step 1 of 2)
+1. Scaffold the monorepo exactly as SPEC.md §7, rooted in src/ (pnpm-workspace.yaml, package.json, pyproject.toml live in src/; git, LICENSE, CLAUDE.md, .claude/ and docs/ stay at the project root; pnpm workspaces, TS strict, vitest; Python 3.11 + pytest for src/verifier/). Add a git repo and an MIT LICENSE.
+2. Write src/packages/contracts: JSON Schemas for Shot, ControlPacket, Candidate, ScoreReport (SPEC.md §5), zod and pydantic mirrors, and fixtures (push_in, orbit, pan, zoom_only, dolly_zoom). One test validates the fixtures in both languages.
+3. Create .claude/agents/ with five agents, each with `isolation: worktree` and a body naming its owned dirs and done-when:
+   - spike-cloud      owns src/workflows/, docs/spikes/cloud.md
+   - spike-poses      owns src/workflows/da3_*, src/comfy_nodes/, docs/spikes/poses.md
+   - verifier         owns src/verifier/, src/tests/golden/expected/
+   - rig-renderer     owns src/packages/rig-core/, src/tests/golden/clips/
+   - server           owns src/apps/server/
+   (studio, which owns src/apps/studio/, is created in Phase 2)
+4. Add .claude/settings.json with "worktree": {"baseRef": "head"}, a .worktreeinclude containing src/.env, and a Stop hook running `cd src && pnpm -r test && pytest verifier`.
+5. Write the repo CLAUDE.md (working style + hard rules above), commit, and tell me Phase 0 is done.
+
+────────────────────────────────────────
+PHASE 1 — M0 spikes, PARALLEL (Step 2 of 2)
+Spawn these four subagents in ONE message so they run at the same time:
+
+A) spike-cloud
+   - Use the comfy-cloud MCP `search_nodes` to check LTXICLoRALoaderModelOnly, LTXAddVideoICLoRAGuide, LoadDA3Model, DA3Inference on Comfy Cloud.
+   - Build src/workflows/ltx25_union_depth.api.json (LTX-2.5 distilled + ltx-2.3-22b-ic-lora-union-control-ref0.5, depth guide input, 121 frames).
+   - Submit one take through @comfyorg/sdk (Cloud; fall back to local comfy-api-proxy). Record wall time and credits per take in docs/spikes/cloud.md.
+   Done when: one real take.mp4 exists, plus a Cloud-or-local verdict.
+
+B) spike-poses
+   - Build src/workflows/da3_poses.api.json (LoadDA3Model Small or Base, DA3Inference mode=multiview).
+   - Find how extrinsics/intrinsics leave the job (SPEC.md §4.3 option A). If no core node exports them, write src/comfy_nodes/SaveCameraPosesJSON (V3) using the comfy-custom-nodes skill.
+   - Document the coordinate convention, units, and how to convert to three.js Y-up right-handed in docs/spikes/poses.md.
+   Done when: a poses.json for one video, with the convention documented.
+
+C) verifier (test-first)
+   - Implement src/verifier/: Umeyama Sim(3) (hand-written), rotErrDeg, transErrPct, fovErrDeg, per-segment scoring, rotation-only mode, solveOk handling (SPEC.md §6). CLI: `python -m verifier score --shot <shot.json> --poses <poses.json>` prints a ScoreReport.
+   - Golden tests on pure-math trajectories first: exact path ≈ 0 error; reversed, half amplitude, zoom-for-dolly, and wrong orbit direction must each score strictly worse.
+   Done when: pytest is green, including the dolly-vs-zoom case.
+
+D) rig-renderer
+   - src/packages/rig-core: camera math, 5 move presets compiled to keyframes, sampler (1+8k frames, 25 fps), focal-length↔FOV conversion, offscreen depth-pass renderer with FIXED near/far normalization.
+   - Render the 5 golden clips (RGB + depth) into src/tests/golden/clips/ from the fixtures.
+   Done when: clips exist and vitest covers conversions and sampler determinism.
+
+Then, in the main session, run the M0 GATE:
+- Run B's DA3 graph on D's golden RGB clips → feed the poses to C's verifier → confirm the correct path scores best and zoom_only ≠ dolly.
+- Confirm A produced one real take.
+Report the gate as a table: Check | Pass/Fail | Evidence. If any check fails, stop and propose max 3 fixes. If all pass, stop and wait for me to say "go M1".
+
+────────────────────────────────────────
+LATER PHASES (do not start until I say go; same parallel pattern)
+- M1: server (fan-out N takes, job store, retry-safe idempotency keys) ∥ verifier (threshold calibration on 10 real takes) ∥ rig-renderer (depth pass encoded for upload). Main session wires `pnpm loop`.
+- M2: studio agent (src/apps/studio: import, keyframes, presets, contact sheet, 3D path overlay, strength slider) ∥ server (REST + events for the studio) ∥ webapp-testing E2E.
+- M3: server (segment regen via extend/first-last-frame) ∥ verifier (seam re-score) ∥ main session (dolly-zoom test, README, preflight).
+- M4: freeze; code-review + pr-review-toolkit pass; demo assets.
+
+Quick next move for me: tell me the exact command to start Phase 0.

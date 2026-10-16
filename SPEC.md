@@ -1,0 +1,273 @@
+# SPEC.md — Comfy-OSH: the camera move that checks itself
+
+**One line:** Draw a camera move in 3D → LTX generates N takes → the app **measures** which takes actually followed the move → ranks them → regenerates only the segment that drifted.
+
+**Deadline:** Fri Oct 30, 9:00 AM PT. **Submit Thu Oct 29 evening.** Source: [comfy.org/open-source-higgsfield](https://comfy.org/open-source-higgsfield/)
+
+---
+
+## 0. TL;DR (read only this if busy)
+
+- **Problem:** closed tools sell camera *labels*. The model often ignores them. Users reroll 3–5× per keeper and pay every time. Higgsfield's CEO compared parts of the process to "a slot machine."
+- **Our answer:** a camera *guarantee with a number*: "5 of 8 takes held the dolly within 3°. Segment 3 drifted, so we regenerated it."
+- **Gap is verified** (report: `Closed loop camera control gap.md`, Oct 16):
+
+| Loop step | Who already does it | What's missing |
+|---|---|---|
+| Author camera in 3D | OmniCam, CozyClay (AGPL) | Nothing, crowded |
+| Render control signals | OmniCam → LTX tracks; LTX Sparse Track Editor | Nothing, crowded |
+| Generate N takes | ComfyUI-CachedSearch | Scores **aesthetics**, not camera |
+| Measure adherence | shotdrift (2D labels only) | No 3D solve; can't tell **dolly from zoom** |
+| Rank | CachedSearch (by aesthetics) | Not by camera error |
+| Repair only the failing segment | Nobody | **Our wedge** |
+
+- **Defensible claim:** "First tool that diffs the generated clip's recovered 3D camera against the path you drew, then ranks takes and regenerates only the segments that drift."
+- **Prize targets:** Most Innovative · Open Weights Only · LTX VFX bonus ($2,000). Best Overall is automatic.
+
+---
+
+## 1. Pitch script (demo video voiceover, ≤90 s, video cap is 2 min)
+
+| Time | Screen | Voiceover |
+|---|---|---|
+| 0:00 | Generic preset dropdown, then a reroll montage | "AI video gives you camera presets. Then it ignores them. Creators reroll three to five times per usable shot." |
+| 0:10 | Studio: drag camera along a dolly rail, set 35mm | "Comfy-OSH flips it. You don't pick a preset. You draw the move." |
+| 0:20 | Depth guide renders, contact sheet fills with 8 takes | "We render that move into a depth guide, and LTX generates eight takes." |
+| 0:30 | 3D overlay: drawn path (white) vs recovered paths (colored), live numbers | "Then the app does what no released tool does: it recovers the camera from every take and measures it against the path you drew." |
+| 0:45 | Ranked list, take 6 flagged red after frame 60 | "Take 3 held the dolly within two degrees. Take 6 drifted after frame sixty." |
+| 0:55 | Only segment 3 of take 6 regenerates; its score turns green | "So we don't reroll the whole shot. We regenerate only the segment that drifted, with stronger guidance." |
+| 1:05 | Dolly zoom test | **If it passes:** "Hardest test: the dolly zoom. A 2D checker can't tell a dolly from a zoom. Ours measures both." **If it fails:** "And when the model can't do a move, the verifier says so. No guessing." |
+| 1:15 | Stack card, repo link, #OpenSourceHiggsfield | "Open weights only: LTX and Depth Anything 3, on Comfy through the SDK. MIT licensed. Camera control you can check." |
+
+Rules for the video: no Higgsfield UI, logos or footage. Use our own mock preset menu. CC0 scenes only.
+
+---
+
+## 2. Scope
+
+**IN (MVP)**
+- glTF/GLB import + primitives + 2 bundled CC0 scenes
+- Camera rig: position/look-at keyframes, focal length (mm), 5 move presets (push-in, pull-out, orbit, pan, dolly zoom) that compile to keyframes
+- Control pass: depth video rendered from the authored camera (exact, from the 3D scene)
+- Generate N takes (default 4, max 8) via `@comfyorg/sdk`
+- Verifier: recover camera per take, score against the authored track, per segment
+- Ranked contact sheet with scores + 3D path overlay
+- Repair: regenerate one failing segment with higher guidance strength
+- Local mode (`comfy-api-proxy`) + Comfy Cloud mode, same code
+
+**OUT (Parking Lot, do not start)**
+- Splat import, photo-to-splat, lens/DoF layer, Blender/Nuke export, phone controller
+- Object motion tracks (Motion-Track IC-LoRA) are **stretch**, only if M3 is green early
+
+---
+
+## 3. The loop (6 boxes)
+
+```
+ AUTHOR ──► RENDER ──► GENERATE ×N ──► MEASURE ──► RANK ──► REPAIR
+ (studio)   (studio)   (Comfy job)     (Comfy job   (server)  (Comfy job)
+                                        + verifier)
+```
+
+| Box | Does | Tool | Output |
+|---|---|---|---|
+| AUTHOR | User keys the camera in 3D | R3F studio | `Shot` JSON |
+| RENDER | Depth video from the authored camera | Three.js offscreen, `rig-core` | `depth.mp4` (121 frames) |
+| GENERATE | N takes, distinct seeds | LTX-2.5 distilled + `ltx-2.3-22b-ic-lora-union-control-ref0.5` (depth) | N × `take.mp4` |
+| MEASURE | Recover per-frame camera per take | Core `LoadDA3Model` + `DA3Inference` (multiview, Small/Base) | poses + intrinsics |
+| RANK | Sim(3)-align, compute errors, sort | `verifier/` (Python) | `ScoreReport` |
+| REPAIR | Regenerate segment k only | LTX extend / first-last-frame, `attention_strength` ↑ | patched take |
+
+Facts the build relies on:
+- LTX frame count = 1 + multiple of 8 (121 frames ≈ 4.8 s at 25 fps).
+- Lightricks' own LTX-2.5 workflows load the 2.3 Union-Control IC-LoRA unchanged.
+- IC-LoRA strength: `attention_strength` 0–1 (default 1.0), optional spatial mask.
+- SDK has **no batch call**: N takes = N `submit()` calls. Idempotency keys **reject** duplicates (422), so save `{key → jobId}` before awaiting.
+- Cloud concurrency: Standard 1 / Creator 3 / Pro 5 / Team 25 jobs.
+
+---
+
+## 4. Architecture decisions (max 3 options each)
+
+### 4.1 Control signal for camera
+
+| Option | Pros | Cons | Cognitive Overhead |
+|---|---|---|---|
+| **A. Depth via Union-Control IC-LoRA** ✅ | Exact from 3D scene; official LTX-2.5 pairing; encodes dolly vs zoom geometrically | Relative depth normalization may weaken dolly zoom | Low |
+| B. Motion tracks via Motion-Track IC-LoRA | Great for object motion | Editor is an interactive widget; headless input unproven | Medium |
+| C. Cameraman IC-LoRA (driving video) | Simple | Built on 2.3, unvalidated on 2.5; no geometry to verify | Low |
+
+**Pick A.** Use **fixed** depth normalization across all frames (not per-frame). B is stretch.
+
+### 4.2 Pose recovery (the verifier's eyes)
+
+| Option | Pros | Cons | Cognitive Overhead |
+|---|---|---|---|
+| **A. Depth Anything 3 Small/Base (core node, multiview)** ✅ | Apache-2.0; in core ComfyUI; returns extrinsics + intrinsics (needed for dolly zoom) | Output units/format undocumented; untested on AI video | Low |
+| B. COLMAP 4 / GLOMAP | BSD; trusted | Unstable on short clips; slow | Medium |
+| C. VGGT-1B-Commercial | Strong | Gated licence; terms unread | High |
+
+**Pick A.** B is a cross-check in golden tests only. **Never** DA3 Large/Giant (CC BY-NC).
+
+### 4.3 How poses leave Comfy
+
+| Option | Pros | Cons | Cognitive Overhead |
+|---|---|---|---|
+| **A. Core node saves poses as a file output** | All on Comfy; Cloud works | Unknown if such a core node exists | Low |
+| B. Our tiny V3 node `SaveCameraPosesJSON` | Certain | Local only (Cloud can't load custom nodes) | Medium |
+| C. Python sidecar runs DA3 directly | Full control | Not "on Comfy"; extra service | Medium |
+
+**Spike A on day 1.** Fallback B for local mode. C only for offline golden tests.
+
+### 4.4 Runtime
+
+| Option | Pros | Cons | Cognitive Overhead |
+|---|---|---|---|
+| Cloud only | "Try it" link | IC-LoRA nodes on Cloud unverified | Low |
+| Local only | Certain | Judges need a GPU | Low |
+| **Both via `COMFY_BASE_URL`** ✅ | Same code | Two paths to test | Medium |
+
+---
+
+## 5. Contracts (build FIRST, everyone codes against them)
+
+Source of truth: JSON Schema in `src/packages/contracts/schema/`. TS (zod) and Python (pydantic) mirror it. One test validates shared fixtures in both.
+
+| Contract | Key fields |
+|---|---|
+| `Shot` | `version`, `scene` (nodes: id, asset, transform), `fps` (25), `frames` (1+8k), `resolution`, `track[]` (t, position, quaternion, fov_v_deg) in **right-handed, Y-up, three.js** convention, `segments` (frame ranges) |
+| `ControlPacket` | `shotId`, `depthVideo`, `depthNormalization` (near/far, fixed), `iclora` (name, strength) |
+| `Candidate` | `shotId`, `seed`, `idempotencyKey`, `jobId`, `status`, `video` |
+| `ScoreReport` | `candidateId`, `solveOk`, `rotErrDeg`, `transErrPct`, `fovErrDeg`, `perSegment[]`, `composite`, `pass` |
+
+---
+
+## 6. Metrics (the heart of the project)
+
+1. Make both trajectories relative to frame 0.
+2. **Umeyama Sim(3)** align recovered camera centers to authored ones. Write it yourself (~30 lines). **Do not import `evo` (GPL-3.0).**
+3. `rotErrDeg` = mean per-frame geodesic angle between rotations.
+4. `transErrPct` = mean position error ÷ authored path length × 100.
+5. `fovErrDeg` = mean |recovered vertical FOV − authored|. This is what separates **dolly from zoom**.
+6. Score **per segment** (default 3 segments). Segment-level beats clip-level (CamVerse).
+7. Pan/tilt shots (path length ≈ 0): rotation-only mode.
+8. Pose solve fails → `solveOk=false`, worst rank. Never drop silently.
+
+**Provisional pass gate** (calibrate on golden set in M0, then freeze): rot < 3°, trans < 10%, fov < 2°.
+
+**Golden test (must pass before any LTX run counts):**
+- Render synthetic clips from `rig-core`: push-in, orbit, pan, zoom-only, dolly zoom.
+- Correct path → near-zero error.
+- Perturbed path (reversed, half amplitude, **zoom instead of dolly**, wrong orbit direction) → strictly worse score.
+- If the verifier can't separate dolly from zoom on synthetic footage, **stop and fix before M1.**
+
+---
+
+## 7. Repo layout
+
+All code that builds the app lives in `src/` (the pnpm workspace root). Project docs, git, licence and Claude config stay at the top level. Paths elsewhere in this spec (`apps/…`, `verifier/`, `workflows/`) are relative to `src/`.
+
+```
+comfy-osh/
+├─ SPEC.md, SKILLS.md, INITIAL_PROMPT.txt, CLAUDE.md, LICENSE (MIT)
+├─ .claude/              agents, settings, hooks
+├─ docs/                 README, licences table, spikes, demo assets
+└─ src/                  pnpm-workspace.yaml, package.json, pyproject.toml, .env (gitignored), .env.example
+   ├─ apps/studio/          Vite + React + R3F: scene, rig, timeline, contact sheet
+   ├─ apps/server/          Node 22 + Fastify + @comfyorg/sdk: graph builder, fan-out, job store
+   ├─ packages/contracts/   JSON Schema + zod + fixtures
+   ├─ packages/rig-core/    camera math, move presets, sampler, depth renderer (pure TS)
+   ├─ verifier/             Python: pose parsing, umeyama, metrics, segment scoring, pytest
+   ├─ comfy_nodes/          (fallback) V3 node SaveCameraPosesJSON; optional CS_VERIFIER adapter
+   ├─ workflows/            API-format JSON: ltx25_union_depth, da3_poses, ltx25_extend_segment
+   └─ tests/golden/         synthetic clips + expected scores
+```
+
+Licence: **MIT**. Don't copy CozyClay (AGPL) or archviz workflows (CC BY-SA).
+
+---
+
+## 8. Milestones (Step X of 5)
+
+### Step 1 of 5 · M0 Spikes + contracts · Fri Oct 16 – Sun Oct 18
+1. Scaffold repo + contracts + fixtures.
+2. Spike: do LTX IC-LoRA nodes run on **Comfy Cloud**? Submit the official LTX-2.5 Union-Control graph via SDK. Record time + cost per take.
+3. Spike: get DA3 extrinsics/intrinsics **out** of a Comfy job (decision 4.3). Document units and conventions.
+4. Verifier v0 + golden test on pure-math trajectories.
+5. `rig-core` renders the 5 synthetic golden clips.
+
+**Gate (Sun):** verifier separates dolly from zoom on synthetic clips · one LTX+depth take runs (Cloud or local).
+
+### Step 2 of 5 · M1 Loop end-to-end (CLI) · Mon Oct 19 – Wed Oct 21
+1. Server: `Shot` → depth pass → N takes (fan-out, job store, retry-safe keys).
+2. Server: takes → DA3 job → poses → verifier → `ScoreReport`.
+3. CLI (from `src/`): `pnpm loop --shot fixtures/push_in.json --n 4` prints a ranked table.
+4. Calibrate pass thresholds on 10 real takes. Freeze.
+
+**Gate (Wed):** one command takes a Shot to a ranked list of real LTX takes.
+
+### Step 3 of 5 · M2 Studio UX · Thu Oct 22 – Sat Oct 24
+1. Scene import (glTF) + 2 CC0 scenes.
+2. Camera keyframes + 5 move presets + focal length.
+3. Contact sheet: takes, scores, pass/fail badges.
+4. 3D overlay: authored path vs recovered paths.
+5. Guidance-strength slider (`attention_strength`).
+
+**Gate (Sat):** a non-dev can author a push-in and get ranked takes in the browser.
+
+### Step 4 of 5 · M3 Repair + hard shot · Sun Oct 25 – Tue Oct 27
+1. Segment regeneration (extend / first-last-frame, strength ↑), re-score.
+2. Seam check: re-score whole clip after patch.
+3. Dolly zoom test. Decide which script line to use.
+4. Local mode README + `.env.example` + preflight (lists missing models).
+5. (Stretch) Motion-Track IC-LoRA for object motion.
+
+**Gate (Tue):** a failed segment is regenerated and its score improves.
+
+### Step 5 of 5 · M4 Freeze + ship · Wed Oct 28 – Thu Oct 29
+1. Code freeze Wed noon. Bug fixes only.
+2. SF Build Night Wed Oct 28: get 3 people to try it. Fix the top issue.
+3. Record demo (script in §1), ≤2 min.
+4. README: run locally, licences table, prior-art credits (OmniCam, shotdrift, CachedSearch, PartiCam).
+5. Submit form + social post #OpenSourceHiggsfield. **Thu evening.**
+
+---
+
+## 9. Risks + fallbacks
+
+| Risk | Fallback |
+|---|---|
+| IC-LoRA nodes missing on Cloud | Local via `comfy-api-proxy`; demo recorded locally; Cloud "try it" for scoring only |
+| No core node exports DA3 poses | `SaveCameraPosesJSON` V3 node (local) |
+| DA3 fails on AI video | Rotation-only scoring; COLMAP cross-check; show `solveOk=false` honestly |
+| Dolly zoom fails | Verifier catches it → still proves the point (script alt line) |
+| Segment seams visible | Regenerate from segment start to end of clip instead |
+| Cloud concurrency (1–5) | Default N=4; queue; show progress via `job.events()` |
+| Credits burn | Low-res drafts for scoring, full-res only for the winner |
+
+---
+
+## 10. Submission checklist (official page)
+
+- [ ] Built on Comfy Developer Platform (SDK/API)
+- [ ] Public GitHub repo, MIT licence, workflows included, local run instructions
+- [ ] Demo video ≤2 min, explains **why it's innovative** (use the §0 table)
+- [ ] Optional: link to try
+- [ ] Social post tagged **#OpenSourceHiggsfield**
+- [ ] SFW, no unlicensed IP or likenesses; one submission
+- [ ] Open Weights Only: no partner nodes or APIs anywhere in the graph
+
+## 11. Re-check the week of submission
+
+- GeoFix (arXiv 2610.14293): unread; may narrow the "first" claim.
+- OmniCam + shotdrift repos: did either add a "diff the generated camera" feature?
+- PartiCam (arXiv 2609.39504): code released?
+- Ask #developer-platform: does running open weights on Comfy Cloud qualify for Open Weights Only? Can one entry win a main prize + the LTX bonus?
+
+---
+
+**Parking Lot**
+- Splats, lens/DoF layer, Blender/Nuke camera export, phone controller, photo-to-splat.
+- `CS_VERIFIER` adapter so CachedSearch users can plug in our camera scorer.
+
+**Quick Next Move:** Open `INITIAL_PROMPT.txt`, paste it into Claude Code inside an empty `comfy-osh/` folder with this SPEC.md copied in.

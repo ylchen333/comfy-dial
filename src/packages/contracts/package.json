@@ -1,0 +1,21 @@
+{
+  "name": "@comfy-osh/contracts",
+  "private": true,
+  "type": "module",
+  "exports": {
+    ".": "./src/index.ts",
+    "./schema/*": "./schema/*",
+    "./fixtures/*": "./fixtures/*"
+  },
+  "scripts": {
+    "typecheck": "tsc -p tsconfig.json",
+    "test": "tsc -p tsconfig.json && vitest run && uv run pytest python/tests",
+    "gen:fixtures": "python3 scripts/gen_fixtures.py"
+  },
+  "dependencies": {
+    "zod": "^4.1.0"
+  },
+  "devDependencies": {
+    "ajv": "^8.17.0"
+  }
+}

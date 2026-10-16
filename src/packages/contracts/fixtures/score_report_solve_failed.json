@@ -1,0 +1,11 @@
+{
+  "candidateId": "fx_orbit-take-3",
+  "solveOk": false,
+  "mode": "full",
+  "rotErrDeg": null,
+  "transErrPct": null,
+  "fovErrDeg": null,
+  "perSegment": [],
+  "composite": null,
+  "pass": false
+}

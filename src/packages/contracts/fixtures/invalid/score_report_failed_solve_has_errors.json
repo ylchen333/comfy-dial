@@ -1,0 +1,15 @@
+{
+  "contract": "ScoreReport",
+  "why": "solveOk=false implies null errors",
+  "data": {
+    "candidateId": "fx_orbit-take-3",
+    "solveOk": false,
+    "mode": "full",
+    "rotErrDeg": 0.5,
+    "transErrPct": null,
+    "fovErrDeg": null,
+    "perSegment": [],
+    "composite": null,
+    "pass": false
+  }
+}

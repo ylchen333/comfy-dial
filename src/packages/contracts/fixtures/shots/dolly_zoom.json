@@ -1,0 +1,194 @@
+{
+  "version": 1,
+  "id": "fx_dolly_zoom",
+  "name": "Dolly-in 8m -> 4m while widening 25 -> ~47.8 deg",
+  "scene": {
+    "nodes": [
+      {
+        "id": "ground",
+        "asset": "primitive:plane",
+        "transform": {
+          "position": [
+            0,
+            0,
+            0
+          ],
+          "quaternion": [
+            -0.707106781,
+            0,
+            0,
+            0.707106781
+          ],
+          "scale": [
+            20,
+            20,
+            1
+          ]
+        }
+      },
+      {
+        "id": "subject",
+        "asset": "primitive:box",
+        "transform": {
+          "position": [
+            0,
+            1,
+            0
+          ],
+          "quaternion": [
+            0,
+            0,
+            0,
+            1
+          ],
+          "scale": [
+            1,
+            2,
+            1
+          ]
+        }
+      },
+      {
+        "id": "pillar_l",
+        "asset": "primitive:cylinder",
+        "transform": {
+          "position": [
+            -3,
+            1.5,
+            -2
+          ],
+          "quaternion": [
+            0,
+            0,
+            0,
+            1
+          ],
+          "scale": [
+            0.5,
+            3,
+            0.5
+          ]
+        }
+      },
+      {
+        "id": "pillar_r",
+        "asset": "primitive:cylinder",
+        "transform": {
+          "position": [
+            3,
+            1.5,
+            -2
+          ],
+          "quaternion": [
+            0,
+            0,
+            0,
+            1
+          ],
+          "scale": [
+            0.5,
+            3,
+            0.5
+          ]
+        }
+      }
+    ]
+  },
+  "fps": 25,
+  "frames": 121,
+  "resolution": {
+    "width": 768,
+    "height": 512
+  },
+  "track": [
+    {
+      "t": 0.0,
+      "position": [
+        0,
+        1.6,
+        8.0
+      ],
+      "quaternion": [
+        -0.037421185,
+        0.0,
+        0.0,
+        0.999299582
+      ],
+      "fov_v_deg": 25.0
+    },
+    {
+      "t": 1.2,
+      "position": [
+        0,
+        1.6,
+        7.0
+      ],
+      "quaternion": [
+        -0.042739624,
+        0.0,
+        0.0,
+        0.999086245
+      ],
+      "fov_v_deg": 28.435152
+    },
+    {
+      "t": 2.4,
+      "position": [
+        0,
+        1.6,
+        6.0
+      ],
+      "quaternion": [
+        -0.049813702,
+        0.0,
+        0.0,
+        0.998758527
+      ],
+      "fov_v_deg": 32.934609
+    },
+    {
+      "t": 3.6,
+      "position": [
+        0,
+        1.6,
+        5.0
+      ],
+      "quaternion": [
+        -0.059678981,
+        0.0,
+        0.0,
+        0.998217621
+      ],
+      "fov_v_deg": 39.060358
+    },
+    {
+      "t": 4.8,
+      "position": [
+        0,
+        1.6,
+        4.0
+      ],
+      "quaternion": [
+        -0.07437623,
+        0.0,
+        0.0,
+        0.997230252
+      ],
+      "fov_v_deg": 47.823974
+    }
+  ],
+  "segments": [
+    {
+      "start": 0,
+      "end": 40
+    },
+    {
+      "start": 40,
+      "end": 80
+    },
+    {
+      "start": 80,
+      "end": 121
+    }
+  ]
+}

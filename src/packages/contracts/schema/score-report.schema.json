@@ -1,0 +1,35 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://comfy-osh.dev/schema/score-report.schema.json",
+  "title": "ScoreReport",
+  "description": "Verifier output for one candidate. Errors are null when solveOk is false; transErrPct is null in rotation_only mode. Rules enforced by mirrors: solveOk=false implies pass=false and null errors.",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["candidateId", "solveOk", "mode", "rotErrDeg", "transErrPct", "fovErrDeg", "perSegment", "composite", "pass"],
+  "properties": {
+    "candidateId": { "$ref": "common.schema.json#/$defs/nonEmptyString" },
+    "solveOk": { "type": "boolean" },
+    "mode": { "enum": ["full", "rotation_only"] },
+    "rotErrDeg": { "type": ["number", "null"], "minimum": 0 },
+    "transErrPct": { "type": ["number", "null"], "minimum": 0 },
+    "fovErrDeg": { "type": ["number", "null"], "minimum": 0 },
+    "perSegment": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["start", "end", "rotErrDeg", "transErrPct", "fovErrDeg", "pass"],
+        "properties": {
+          "start": { "type": "integer", "minimum": 0 },
+          "end": { "type": "integer", "minimum": 1 },
+          "rotErrDeg": { "type": ["number", "null"], "minimum": 0 },
+          "transErrPct": { "type": ["number", "null"], "minimum": 0 },
+          "fovErrDeg": { "type": ["number", "null"], "minimum": 0 },
+          "pass": { "type": "boolean" }
+        }
+      }
+    },
+    "composite": { "description": "Lower is better. Used to rank takes.", "type": ["number", "null"], "minimum": 0 },
+    "pass": { "type": "boolean" }
+  }
+}

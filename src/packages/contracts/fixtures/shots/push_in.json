@@ -1,0 +1,149 @@
+{
+  "version": 1,
+  "id": "fx_push_in",
+  "name": "Push-in 6m -> 3m, 40 deg",
+  "scene": {
+    "nodes": [
+      {
+        "id": "ground",
+        "asset": "primitive:plane",
+        "transform": {
+          "position": [
+            0,
+            0,
+            0
+          ],
+          "quaternion": [
+            -0.707106781,
+            0,
+            0,
+            0.707106781
+          ],
+          "scale": [
+            20,
+            20,
+            1
+          ]
+        }
+      },
+      {
+        "id": "subject",
+        "asset": "primitive:box",
+        "transform": {
+          "position": [
+            0,
+            1,
+            0
+          ],
+          "quaternion": [
+            0,
+            0,
+            0,
+            1
+          ],
+          "scale": [
+            1,
+            2,
+            1
+          ]
+        }
+      },
+      {
+        "id": "pillar_l",
+        "asset": "primitive:cylinder",
+        "transform": {
+          "position": [
+            -3,
+            1.5,
+            -2
+          ],
+          "quaternion": [
+            0,
+            0,
+            0,
+            1
+          ],
+          "scale": [
+            0.5,
+            3,
+            0.5
+          ]
+        }
+      },
+      {
+        "id": "pillar_r",
+        "asset": "primitive:cylinder",
+        "transform": {
+          "position": [
+            3,
+            1.5,
+            -2
+          ],
+          "quaternion": [
+            0,
+            0,
+            0,
+            1
+          ],
+          "scale": [
+            0.5,
+            3,
+            0.5
+          ]
+        }
+      }
+    ]
+  },
+  "fps": 25,
+  "frames": 121,
+  "resolution": {
+    "width": 768,
+    "height": 512
+  },
+  "track": [
+    {
+      "t": 0,
+      "position": [
+        0,
+        1.6,
+        6.0
+      ],
+      "quaternion": [
+        -0.049813702,
+        0.0,
+        0.0,
+        0.998758527
+      ],
+      "fov_v_deg": 40
+    },
+    {
+      "t": 4.8,
+      "position": [
+        0,
+        1.6,
+        3.0
+      ],
+      "quaternion": [
+        -0.098537618,
+        0.0,
+        0.0,
+        0.995133327
+      ],
+      "fov_v_deg": 40
+    }
+  ],
+  "segments": [
+    {
+      "start": 0,
+      "end": 40
+    },
+    {
+      "start": 40,
+      "end": 80
+    },
+    {
+      "start": 80,
+      "end": 121
+    }
+  ]
+}

@@ -1,0 +1,18 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://comfy-osh.dev/schema/candidate.schema.json",
+  "title": "Candidate",
+  "description": "One generated take. Save idempotencyKey -> jobId before awaiting the job (SDK rejects duplicate keys with 422).",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["id", "shotId", "seed", "idempotencyKey", "jobId", "status", "video"],
+  "properties": {
+    "id": { "$ref": "common.schema.json#/$defs/nonEmptyString" },
+    "shotId": { "$ref": "common.schema.json#/$defs/nonEmptyString" },
+    "seed": { "type": "integer", "minimum": 0 },
+    "idempotencyKey": { "$ref": "common.schema.json#/$defs/nonEmptyString" },
+    "jobId": { "type": ["string", "null"] },
+    "status": { "enum": ["pending", "submitted", "running", "succeeded", "failed"] },
+    "video": { "description": "URI or path of take.mp4 once succeeded.", "type": ["string", "null"] }
+  }
+}

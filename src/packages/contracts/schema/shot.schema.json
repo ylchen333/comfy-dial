@@ -1,0 +1,78 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://comfy-osh.dev/schema/shot.schema.json",
+  "title": "Shot",
+  "description": "An authored camera move. Coordinates are right-handed, Y-up, three.js convention; the camera looks down its local -Z. Cross-field rules not expressible here (enforced by the zod and pydantic mirrors): frames = 1 + 8k; track t strictly increasing and within the clip; segments contiguous, starting at 0 and ending at frames; quaternions unit length.",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["version", "id", "scene", "fps", "frames", "resolution", "track", "segments"],
+  "properties": {
+    "version": { "const": 1 },
+    "id": { "$ref": "common.schema.json#/$defs/nonEmptyString" },
+    "name": { "type": "string" },
+    "scene": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["nodes"],
+      "properties": {
+        "nodes": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "additionalProperties": false,
+            "required": ["id", "asset", "transform"],
+            "properties": {
+              "id": { "$ref": "common.schema.json#/$defs/nonEmptyString" },
+              "asset": {
+                "description": "A glTF/GLB path relative to the scene bundle, or primitive:<box|sphere|plane|cylinder>.",
+                "$ref": "common.schema.json#/$defs/nonEmptyString"
+              },
+              "transform": {
+                "type": "object",
+                "additionalProperties": false,
+                "required": ["position", "quaternion", "scale"],
+                "properties": {
+                  "position": { "$ref": "common.schema.json#/$defs/vec3" },
+                  "quaternion": { "$ref": "common.schema.json#/$defs/quat" },
+                  "scale": { "$ref": "common.schema.json#/$defs/vec3" }
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "fps": { "const": 25 },
+    "frames": { "description": "1 + 8k (LTX rule).", "type": "integer", "minimum": 9 },
+    "resolution": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["width", "height"],
+      "properties": {
+        "width": { "type": "integer", "minimum": 64, "multipleOf": 32 },
+        "height": { "type": "integer", "minimum": 64, "multipleOf": 32 }
+      }
+    },
+    "track": {
+      "description": "Camera keyframes. rig-core samples them to one pose per frame.",
+      "type": "array",
+      "minItems": 2,
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["t", "position", "quaternion", "fov_v_deg"],
+        "properties": {
+          "t": { "description": "Seconds from clip start.", "type": "number", "minimum": 0 },
+          "position": { "$ref": "common.schema.json#/$defs/vec3" },
+          "quaternion": { "$ref": "common.schema.json#/$defs/quat" },
+          "fov_v_deg": { "type": "number", "exclusiveMinimum": 0, "exclusiveMaximum": 180 }
+        }
+      }
+    },
+    "segments": {
+      "type": "array",
+      "minItems": 1,
+      "items": { "$ref": "common.schema.json#/$defs/frameRange" }
+    }
+  }
+}
