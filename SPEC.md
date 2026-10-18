@@ -114,12 +114,16 @@ Facts the build relies on:
 | Option | Pros | Cons | Cognitive Overhead |
 |---|---|---|---|
 | **A. Registry pack node `DepthAnythingV3_MultiView` + core `SaveText`** ✅ | Works on Cloud and local; no code of ours; poses leave as JSON text files | Depends on a third-party pack; its loader defaults to `da3_large` (banned), so always set `da3_small`/`da3_base` | Low |
-| B. Our tiny V3 node `SaveCameraPosesJSON` | Certain; clean `Poses` JSON | Runs on Cloud only if published to the Comfy Registry; otherwise local only | Medium |
+| B. Our tiny V3 node `SaveCameraPosesJSON` | Certain; clean `Poses` JSON | Local only: rejected by Cloud as `unknown_class_type` (tested Oct 18) | Medium |
 | C. Python sidecar runs DA3 directly | Full control | Not "on Comfy"; extra service | Medium |
 
-**Cloud and custom nodes:** Comfy Cloud loads custom nodes published on the Comfy Registry. It cannot load nodes added by hand through the cloud.comfy.org website (the frontend). No core node exports DA3 extrinsics/intrinsics (checked Oct 16: `DA3Inference` returns geometry only).
+**Cloud and custom nodes (tested Oct 18 with `comfy workflow validate --where cloud`, free):**
+- Cloud's node catalogue (`object_info`) includes many community packs. `da3_poses.api.json`, which uses the `ComfyUI-DepthAnythingV3` pack, validates (`valid: true`) and runs.
+- `da3_poses_local.api.json`, which uses our own unpublished `ComfyOSH_SaveCameraPosesJSON`, is rejected with `unknown_class_type`. It is the only error, so the core nodes in that graph are fine.
+- Not tested: whether publishing a node to the Comfy Registry puts it on Cloud, and whether the cloud.comfy.org web app lets a user add a node by hand. Until tested, assume Cloud runs only nodes already in its catalogue.
+- No core node exports DA3 extrinsics/intrinsics (checked Oct 16: `DA3Inference` returns geometry only).
 
-**Spiked Oct 16 (Cloud, `da3_small`, 11.7 s):** A works. B is the fallback (publish it to the Registry for Cloud). C only for offline golden tests.
+**Spiked Oct 16 (Cloud, `da3_small`, 11.7 s):** A works. B is the fallback and runs locally (on Cloud only if its catalogue adds it). C only for offline golden tests.
 
 ### 4.4 Runtime
 
@@ -248,7 +252,7 @@ Licence: **MIT**. Don't copy CozyClay (AGPL) or archviz workflows (CC BY-SA).
 | Risk | Fallback |
 |---|---|
 | IC-LoRA nodes missing on Cloud | Local via `comfy-api-proxy`; demo recorded locally; Cloud "try it" for scoring only |
-| DA3 pose export depends on a third-party Registry pack | Pin the pack version. Fallback: `SaveCameraPosesJSON` V3 node, published to the Registry for Cloud |
+| DA3 pose export depends on a third-party pack in Cloud's catalogue | Pin the pack version. Fallback: `SaveCameraPosesJSON` V3 node (local mode only) |
 | DA3 fails on AI video | Rotation-only scoring; COLMAP cross-check; show `solveOk=false` honestly |
 | Dolly zoom fails | Verifier catches it → still proves the point (script alt line) |
 | Segment seams visible | Regenerate from segment start to end of clip instead |

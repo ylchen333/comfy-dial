@@ -16,12 +16,12 @@ src/
 ├─ verifier/             Python: Umeyama Sim(3), metrics, segment scoring
 ├─ comfy_nodes/          fallback V3 node SaveCameraPosesJSON
 ├─ workflows/            API-format Comfy graphs
-└─ tests/golden/         synthetic clips + expected scores
+└─ tests/golden/         clip metadata + expected scores (mp4s are regenerated, see docs/setup.md)
 ```
 
 ## Run locally
 
-Needs Node 22, pnpm 11, uv and Python 3.11.
+Needs Node 22, pnpm 11, uv and Python 3.11. Rendering the golden clips also needs **ffmpeg on your `PATH`** (macOS: `brew install ffmpeg`; Debian/Ubuntu: `sudo apt install ffmpeg`). Tests do not need it. Details: [docs/setup.md](docs/setup.md).
 
 ```bash
 cd src
