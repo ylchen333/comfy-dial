@@ -1,0 +1,8 @@
+{
+  "1": {"class_type": "LoadVideo", "inputs": {"file": "815c6f32f622949244c579bed74ba8ed4524901e0ece0cb3923d400a806e74ed.mp4"}},
+  "2": {"class_type": "GetVideoComponents", "inputs": {"video": ["1", 0]}},
+  "3": {"class_type": "DownloadAndLoadDepthAnythingV3Model", "inputs": {"model": "da3_small.safetensors", "precision": "auto", "attention": "auto"}},
+  "4": {"class_type": "DepthAnythingV3_MultiView", "inputs": {"da3_model": ["3", 0], "normalization_mode": "V2-Style", "images": ["2", 0], "resize_method": "resize", "invert_depth": false, "keep_model_size": false}},
+  "5": {"class_type": "SaveText", "inputs": {"text": ["4", 4], "filename_prefix": "da3/extrinsics", "format": "txt"}},
+  "6": {"class_type": "SaveText", "inputs": {"text": ["4", 5], "filename_prefix": "da3/intrinsics", "format": "txt"}}
+}
