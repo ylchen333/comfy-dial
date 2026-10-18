@@ -74,7 +74,7 @@ Rules for the video: no Higgsfield UI, logos or footage. Use our own mock preset
 | AUTHOR | User keys the camera in 3D | R3F studio | `Shot` JSON |
 | RENDER | Depth video from the authored camera | Three.js offscreen, `rig-core` | `depth.mp4` (121 frames) |
 | GENERATE | N takes, distinct seeds | LTX-2.5 distilled + `ltx-2.3-22b-ic-lora-union-control-ref0.5` (depth) | N × `take.mp4` |
-| MEASURE | Recover per-frame camera per take | Core `LoadDA3Model` + `DA3Inference` (multiview, Small/Base) | poses + intrinsics |
+| MEASURE | Recover per-frame camera per take | Registry pack `ComfyUI-DepthAnythingV3`: `DownloadAndLoadDepthAnythingV3Model` + `DepthAnythingV3_MultiView` (Small/Base) → core `SaveText` (see §4.3) | poses + intrinsics |
 | RANK | Sim(3)-align, compute errors, sort | `verifier/` (Python) | `ScoreReport` |
 | REPAIR | Regenerate segment k only | LTX extend / first-last-frame, `attention_strength` ↑ | patched take |
 
@@ -103,21 +103,23 @@ Facts the build relies on:
 
 | Option | Pros | Cons | Cognitive Overhead |
 |---|---|---|---|
-| **A. Depth Anything 3 Small/Base (core node, multiview)** ✅ | Apache-2.0; in core ComfyUI; returns extrinsics + intrinsics (needed for dolly zoom) | Output units/format undocumented; untested on AI video | Low |
+| **A. Depth Anything 3 Small/Base (multiview)** ✅ | Apache-2.0 weights; returns extrinsics + intrinsics (needed for dolly zoom) | Output units/format undocumented; untested on AI video; core DA3 nodes return geometry only, so poses come from a pack node (§4.3) | Low |
 | B. COLMAP 4 / GLOMAP | BSD; trusted | Unstable on short clips; slow | Medium |
 | C. VGGT-1B-Commercial | Strong | Gated licence; terms unread | High |
 
-**Pick A.** B is a cross-check in golden tests only. **Never** DA3 Large/Giant (CC BY-NC).
+**Pick A.** B is a cross-check in golden tests only. **Never** DA3 Large/Giant (CC BY-NC). The `ComfyUI-DepthAnythingV3` wrapper is MIT per its author (PozzettiAndrea, relayed by the project owner, not independently checked); model weights follow each model's own licence, so only Small/Base.
 
 ### 4.3 How poses leave Comfy
 
 | Option | Pros | Cons | Cognitive Overhead |
 |---|---|---|---|
-| **A. Core node saves poses as a file output** | All on Comfy; Cloud works | Unknown if such a core node exists | Low |
-| B. Our tiny V3 node `SaveCameraPosesJSON` | Certain | Local only (Cloud can't load custom nodes) | Medium |
+| **A. Registry pack node `DepthAnythingV3_MultiView` + core `SaveText`** ✅ | Works on Cloud and local; no code of ours; poses leave as JSON text files | Depends on a third-party pack; its loader defaults to `da3_large` (banned), so always set `da3_small`/`da3_base` | Low |
+| B. Our tiny V3 node `SaveCameraPosesJSON` | Certain; clean `Poses` JSON | Runs on Cloud only if published to the Comfy Registry; otherwise local only | Medium |
 | C. Python sidecar runs DA3 directly | Full control | Not "on Comfy"; extra service | Medium |
 
-**Spike A on day 1.** Fallback B for local mode. C only for offline golden tests.
+**Cloud and custom nodes:** Comfy Cloud loads custom nodes published on the Comfy Registry. It cannot load nodes added by hand through the cloud.comfy.org website (the frontend). No core node exports DA3 extrinsics/intrinsics (checked Oct 16: `DA3Inference` returns geometry only).
+
+**Spiked Oct 16 (Cloud, `da3_small`, 11.7 s):** A works. B is the fallback (publish it to the Registry for Cloud). C only for offline golden tests.
 
 ### 4.4 Runtime
 
@@ -139,6 +141,7 @@ Source of truth: JSON Schema in `src/packages/contracts/schema/`. TS (zod) and P
 | `ControlPacket` | `shotId`, `depthVideo`, `depthNormalization` (near/far, fixed), `iclora` (name, strength) |
 | `Candidate` | `shotId`, `seed`, `idempotencyKey`, `jobId`, `status`, `video` |
 | `ScoreReport` | `candidateId`, `solveOk`, `rotErrDeg`, `transErrPct`, `fovErrDeg`, `perSegment[]`, `composite`, `pass` |
+| `Poses` | `schema` (`comfy-osh/poses/1`), `fps`, `image`, `solve_ok`, `frames[]` (index, `t`, position, quaternion, fov_v_deg, optional fx/fy/cx/cy). Camera-to-world, same convention as `Shot`. Frames may be a subset: the verifier interpolates onto the Shot's frame times using `t`. |
 
 ---
 
@@ -154,6 +157,13 @@ Source of truth: JSON Schema in `src/packages/contracts/schema/`. TS (zod) and P
 8. Pose solve fails → `solveOk=false`, worst rank. Never drop silently.
 
 **Provisional pass gate** (calibrate on golden set in M0, then freeze): rot < 3°, trans < 10%, fov < 2°.
+
+**Calibration decision (Oct 18): calibrate once, then freeze.**
+1. Noise floor: score DA3 on the RGB golden clips (known-perfect camera). No threshold may sit below the error measured there.
+2. Agreement: label about 10 real takes "followed" or "didn't" by eye, and pick the thresholds that best match the labels (M1 step 4).
+3. FOV may be reported but not gated if DA3 Small's FOV proves unreliable (`--no-fov-gate`).
+
+**Not in the MVP, revisit after it works end to end:** user-adjustable thresholds (Strict / Normal / Loose presets plus an advanced override, floored at the measured noise). `ScoreReport` already carries the raw errors, so adding this later needs no change to the measurement.
 
 **Golden test (must pass before any LTX run counts):**
 - Render synthetic clips from `rig-core`: push-in, orbit, pan, zoom-only, dolly zoom.
@@ -180,7 +190,7 @@ comfy-osh/
    ├─ verifier/             Python: pose parsing, umeyama, metrics, segment scoring, pytest
    ├─ comfy_nodes/          (fallback) V3 node SaveCameraPosesJSON; optional CS_VERIFIER adapter
    ├─ workflows/            API-format JSON: ltx25_union_depth, da3_poses, ltx25_extend_segment
-   └─ tests/golden/         synthetic clips + expected scores
+   └─ tests/golden/         clip metadata + expected scores (mp4s are git-ignored; `pnpm --filter @comfy-osh/rig-core render:golden` regenerates them, needs ffmpeg)
 ```
 
 Licence: **MIT**. Don't copy CozyClay (AGPL) or archviz workflows (CC BY-SA).
@@ -238,7 +248,7 @@ Licence: **MIT**. Don't copy CozyClay (AGPL) or archviz workflows (CC BY-SA).
 | Risk | Fallback |
 |---|---|
 | IC-LoRA nodes missing on Cloud | Local via `comfy-api-proxy`; demo recorded locally; Cloud "try it" for scoring only |
-| No core node exports DA3 poses | `SaveCameraPosesJSON` V3 node (local) |
+| DA3 pose export depends on a third-party Registry pack | Pin the pack version. Fallback: `SaveCameraPosesJSON` V3 node, published to the Registry for Cloud |
 | DA3 fails on AI video | Rotation-only scoring; COLMAP cross-check; show `solveOk=false` honestly |
 | Dolly zoom fails | Verifier catches it → still proves the point (script alt line) |
 | Segment seams visible | Regenerate from segment start to end of clip instead |
@@ -262,7 +272,7 @@ Licence: **MIT**. Don't copy CozyClay (AGPL) or archviz workflows (CC BY-SA).
 - GeoFix (arXiv 2610.14293): unread; may narrow the "first" claim.
 - OmniCam + shotdrift repos: did either add a "diff the generated camera" feature?
 - PartiCam (arXiv 2609.39504): code released?
-- Ask #developer-platform: does running open weights on Comfy Cloud qualify for Open Weights Only? Can one entry win a main prize + the LTX bonus?
+- ~~Does running open weights on Comfy Cloud qualify for Open Weights Only?~~ **Answered Oct 18 (Deep Mehta, relayed by the project owner): yes.**
 
 ---
 

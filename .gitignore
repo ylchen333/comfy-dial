@@ -11,3 +11,5 @@ outputs/
 *.tsbuildinfo
 .claude/worktrees/
 .history/
+src/workflows/out/
+src/tests/golden/clips/*.mp4
