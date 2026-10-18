@@ -1,0 +1,21 @@
+{
+  "schema": "comfy-osh/poses/1",
+  "fps": 8,
+  "image": { "width": 448, "height": 252 },
+  "solve_ok": true,
+  "convention": {
+    "handedness": "right",
+    "up": "+Y",
+    "camera_forward": "-Z",
+    "quaternion": "xyzw",
+    "transform": "camera-to-world",
+    "units": "relative (non-metric), world = camera 0 frame"
+  },
+  "source": { "model": "depth-anything-3", "mode": "multiview" },
+  "frames": [
+    { "index": 0, "t": 0, "position": [0, 0, 0], "quaternion": [0, 0, 0, 1], "fov_v_deg": 35, "fx": 399.6, "fy": 399.6, "cx": 224, "cy": 126 },
+    { "index": 4, "t": 0.5, "position": [0, 0, -0.05], "quaternion": [0, 0, 0, 1], "fov_v_deg": 35, "fx": 399.6, "fy": 399.6, "cx": 224, "cy": 126 },
+    { "index": 8, "t": 1, "position": [0.01, 0, -0.1], "quaternion": [0, 0.0087265355, 0, 0.9999619231], "fov_v_deg": 35.2 },
+    { "index": 16, "t": 2, "position": [0.02, 0, -0.2], "quaternion": [0, 0.0174524064, 0, 0.9998476952], "fov_v_deg": 35 }
+  ]
+}

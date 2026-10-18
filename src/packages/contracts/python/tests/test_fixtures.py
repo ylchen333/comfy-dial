@@ -15,6 +15,7 @@ SCHEMA_FILE = {
     "ControlPacket": "control-packet.schema.json",
     "Candidate": "candidate.schema.json",
     "ScoreReport": "score-report.schema.json",
+    "Poses": "poses.schema.json",
 }
 
 
@@ -37,6 +38,8 @@ VALID = [("Shot", p) for p in sorted((ROOT / "fixtures/shots").glob("*.json"))] 
     ("Candidate", ROOT / "fixtures/candidate.json"),
     ("ScoreReport", ROOT / "fixtures/score_report.json"),
     ("ScoreReport", ROOT / "fixtures/score_report_solve_failed.json"),
+    ("Poses", ROOT / "fixtures/poses.json"),
+    ("Poses", ROOT / "fixtures/poses_solve_failed.json"),
 ]
 
 

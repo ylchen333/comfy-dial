@@ -135,5 +135,45 @@ export const ScoreReport = z
   });
 export type ScoreReport = z.infer<typeof ScoreReport>;
 
-export const contracts = { Shot, ControlPacket, Candidate, ScoreReport } as const;
+const poseFrame = z.strictObject({
+  index: z.number().int().min(0),
+  t: z.number().min(0),
+  position: vec3,
+  quaternion: quat,
+  fov_v_deg: z.number().gt(0).lt(180),
+  fx: z.number().gt(0).optional(),
+  fy: z.number().gt(0).optional(),
+  cx: z.number().optional(),
+  cy: z.number().optional(),
+});
+export const Poses = z
+  .strictObject({
+    schema: z.literal("comfy-osh/poses/1"),
+    fps: z.number().gt(0),
+    image: z.strictObject({ width: z.number().int().min(1), height: z.number().int().min(1) }),
+    solve_ok: z.boolean(),
+    convention: z.record(z.string(), z.unknown()).optional(),
+    source: z.record(z.string(), z.unknown()).optional(),
+    frames: z.array(poseFrame),
+  })
+  .superRefine((p, ctx) => {
+    if (p.solve_ok && p.frames.length === 0) {
+      ctx.addIssue({ code: "custom", path: ["frames"], message: "solve_ok=true requires at least one frame" });
+    }
+    p.frames.forEach((f, i) => {
+      const prev = p.frames[i - 1];
+      if (prev && f.index <= prev.index) {
+        ctx.addIssue({ code: "custom", path: ["frames", i, "index"], message: "index must be strictly increasing" });
+      }
+      if (prev && f.t <= prev.t) {
+        ctx.addIssue({ code: "custom", path: ["frames", i, "t"], message: "t must be strictly increasing" });
+      }
+      if (!isUnit(f.quaternion)) {
+        ctx.addIssue({ code: "custom", path: ["frames", i, "quaternion"], message: "quaternion must be unit length" });
+      }
+    });
+  });
+export type Poses = z.infer<typeof Poses>;
+
+export const contracts = { Shot, ControlPacket, Candidate, ScoreReport, Poses } as const;
 export type ContractName = keyof typeof contracts;

@@ -15,6 +15,7 @@ const schemaFile: Record<ContractName, string> = {
   ControlPacket: "control-packet.schema.json",
   Candidate: "candidate.schema.json",
   ScoreReport: "score-report.schema.json",
+  Poses: "poses.schema.json",
 };
 
 const ajv = new Ajv2020({ strict: true, allErrors: true });
@@ -32,6 +33,8 @@ const valid: [ContractName, string[]][] = [
   ["Candidate", ["fixtures/candidate.json"]],
   ["ScoreReport", ["fixtures/score_report.json"]],
   ["ScoreReport", ["fixtures/score_report_solve_failed.json"]],
+  ["Poses", ["fixtures/poses.json"]],
+  ["Poses", ["fixtures/poses_solve_failed.json"]],
 ];
 
 describe("valid fixtures", () => {

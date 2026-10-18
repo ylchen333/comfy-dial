@@ -1,0 +1,13 @@
+{
+  "contract": "Poses",
+  "data": {
+    "schema": "comfy-osh/poses/1",
+    "fps": 8,
+    "image": { "width": 448, "height": 252 },
+    "solve_ok": true,
+    "frames": [
+      { "index": 0, "t": 0.5, "position": [0, 0, 0], "quaternion": [0, 0, 0, 1], "fov_v_deg": 35 },
+      { "index": 1, "t": 0.125, "position": [0, 0, -0.01], "quaternion": [0, 0, 0, 1], "fov_v_deg": 35 }
+    ]
+  }
+}

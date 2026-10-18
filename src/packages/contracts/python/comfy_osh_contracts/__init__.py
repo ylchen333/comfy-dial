@@ -8,7 +8,7 @@ arrays for tuples and ints for floats; Python-mode `model_validate` does not).
 from __future__ import annotations
 
 import math
-from typing import Annotated, Literal
+from typing import Annotated, Any, Literal
 
 from pydantic import BaseModel, ConfigDict, Field, model_validator
 
@@ -164,9 +164,53 @@ class ScoreReport(_Strict):
         return self
 
 
+class ImageSize(_Strict):
+    width: Annotated[int, Field(ge=1)]
+    height: Annotated[int, Field(ge=1)]
+
+
+class PoseFrame(_Strict):
+    index: Annotated[int, Field(ge=0)]
+    t: Annotated[float, Field(ge=0)]
+    position: Vec3
+    quaternion: Quat
+    fov_v_deg: Annotated[float, Field(gt=0, lt=180)]
+    fx: Annotated[float, Field(gt=0)] | None = None
+    fy: Annotated[float, Field(gt=0)] | None = None
+    cx: float | None = None
+    cy: float | None = None
+
+
+class Poses(_Strict):
+    # `schema` shadows a BaseModel attribute, so the field is stored as `schema_id` under its wire name.
+    schema_id: Literal["comfy-osh/poses/1"] = Field(alias="schema")
+    fps: Annotated[float, Field(gt=0)]
+    image: ImageSize
+    solve_ok: bool
+    convention: dict[str, Any] | None = None
+    source: dict[str, Any] | None = None
+    frames: list[PoseFrame]
+
+    model_config = ConfigDict(extra="forbid", strict=True, populate_by_name=True)
+
+    @model_validator(mode="after")
+    def _cross_field(self) -> Poses:
+        if self.solve_ok and not self.frames:
+            raise ValueError("solve_ok=true requires at least one frame")
+        for prev, f in zip([None, *self.frames], self.frames):
+            if prev is not None and f.index <= prev.index:
+                raise ValueError("index must be strictly increasing")
+            if prev is not None and f.t <= prev.t:
+                raise ValueError("t must be strictly increasing")
+            if abs(math.hypot(*f.quaternion) - 1) > UNIT_QUAT_TOLERANCE:
+                raise ValueError("quaternion must be unit length")
+        return self
+
+
 CONTRACTS: dict[str, type[BaseModel]] = {
     "Shot": Shot,
     "ControlPacket": ControlPacket,
     "Candidate": Candidate,
     "ScoreReport": ScoreReport,
+    "Poses": Poses,
 }
