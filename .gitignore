@@ -13,3 +13,4 @@ outputs/
 .history/
 src/workflows/out/
 src/tests/golden/clips/*.mp4
+src/tests/golden/parallax_scene2/*.npz

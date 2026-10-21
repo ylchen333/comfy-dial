@@ -17,7 +17,7 @@
 | Author camera in 3D | OmniCam, CozyClay (AGPL) | Nothing, crowded |
 | Render control signals | OmniCam → LTX tracks; LTX Sparse Track Editor | Nothing, crowded |
 | Generate N takes | ComfyUI-CachedSearch | Scores **aesthetics**, not camera |
-| Measure adherence | shotdrift (2D labels only) | No 3D solve; can't tell **dolly from zoom** |
+| Measure adherence | shotdrift (2D labels only) | No 3D solve; we measure **camera path and move direction** (dolly vs zoom is advisory, see §6 status) |
 | Rank | CachedSearch (by aesthetics) | Not by camera error |
 | Repair only the failing segment | Nobody | **Our wedge** |
 
@@ -36,7 +36,7 @@
 | 0:30 | 3D overlay: drawn path (white) vs recovered paths (colored), live numbers | "Then the app does what no released tool does: it recovers the camera from every take and measures it against the path you drew." |
 | 0:45 | Ranked list, take 6 flagged red after frame 60 | "Take 3 held the dolly within two degrees. Take 6 drifted after frame sixty." |
 | 0:55 | Only segment 3 of take 6 regenerates; its score turns green | "So we don't reroll the whole shot. We regenerate only the segment that drifted, with stronger guidance." |
-| 1:05 | Dolly zoom test | **If it passes:** "Hardest test: the dolly zoom. A 2D checker can't tell a dolly from a zoom. Ours measures both." **If it fails:** "And when the model can't do a move, the verifier says so. No guessing." |
+| 1:05 | Dolly zoom test | **If it passes:** "Hardest test: the dolly zoom. We flag when the model zoomed instead of dollying." **If it fails:** "And when the model can't do a move, the verifier says so. No guessing." |
 | 1:15 | Stack card, repo link, #OpenSourceHiggsfield | "Open weights only: LTX and Depth Anything 3, on Comfy through the SDK. MIT licensed. Camera control you can check." |
 
 Rules for the video: no Higgsfield UI, logos or footage. Use our own mock preset menu. CC0 scenes only.
@@ -151,11 +151,11 @@ Source of truth: JSON Schema in `src/packages/contracts/schema/`. TS (zod) and P
 
 ## 6. Metrics (the heart of the project)
 
-1. Make both trajectories relative to frame 0.
-2. **Umeyama Sim(3)** align recovered camera centers to authored ones. Write it yourself (~30 lines). **Do not import `evo` (GPL-3.0).**
+1. Make both trajectories relative to frame 0, **expressed in the frame-0 camera's own axes** (so "forward" means forward of the first frame, not of the world).
+2. Fit **scale only** (s ≥ 0, no free rotation) from recovered to authored camera centers. Write it yourself. **Do not import `evo` (GPL-3.0).** Why not full Umeyama Sim(3): its free rotation absorbs a reversed straight dolly (found Oct 18: a reversed dolly scored 1.5% translation error and passed). Umeyama stays in `geom.py` for orbit-type paths if a test needs it. Known blind spot: a straight dolly of the wrong amplitude is not caught, because scale is fitted; amplitude would need scale anchoring. Translation gate widens to about 15% (correct real dollies score 6 to 9% under this metric; to be frozen in calibration).
 3. `rotErrDeg` = mean per-frame geodesic angle between rotations.
-4. `transErrPct` = mean position error ÷ authored path length × 100.
-5. `fovErrDeg` = mean |recovered vertical FOV − authored|. This is what separates **dolly from zoom**.
+4. `transErrPct` = mean position error (after the scale fit) ÷ authored path length × 100.
+5. `fovErrDeg` = mean |recovered vertical FOV − authored|. DA3's FOV is biased (about +10°) and under-tracks real zooms, so the absolute value is unreliable. The **FOV ratio (last ÷ first)** follows the move direction on most real takes and is reported as an advisory move-class label, not a hard gate (decided Oct 21).
 6. Score **per segment** (default 3 segments). Segment-level beats clip-level (CamVerse).
 7. Pan/tilt shots (path length ≈ 0): rotation-only mode.
 8. Pose solve fails → `solveOk=false`, worst rank. Never drop silently.
@@ -173,7 +173,10 @@ Source of truth: JSON Schema in `src/packages/contracts/schema/`. TS (zod) and P
 - Render synthetic clips from `rig-core`: push-in, orbit, pan, zoom-only, dolly zoom.
 - Correct path → near-zero error.
 - Perturbed path (reversed, half amplitude, **zoom instead of dolly**, wrong orbit direction) → strictly worse score.
+- A straight dolly with fixed orientation, reversed, **must fail** (added Oct 18).
 - If the verifier can't separate dolly from zoom on synthetic footage, **stop and fix before M1.**
+
+**Status (Oct 18):** on real LTX takes, DA3 poses separate dolly from zoom from dolly zoom in only 6 of 9 (FOV is biased and under-tracked). A parallax statistic (f_ratio from DA3 depth and subject size) separated 9 of 9 on one scene, but fails on rendered clips and is unvalidated on other scenes. A second-scene check is running before it enters the verifier.
 
 ---
 
