@@ -51,9 +51,13 @@ def mat_to_quat_xyzw(r: np.ndarray) -> np.ndarray:
     return q / np.linalg.norm(q)
 
 
-def build_poses(extrinsics, intrinsics, fps: float | None = None, width: int | None = None,
-                height: int | None = None, source: dict | None = None) -> dict:
-    """extrinsics: (S,3,4) w2c; intrinsics: (S,3,3). Returns the poses.json document."""
+def build_poses(extrinsics, intrinsics, fps: float = 25.0, width: int | None = None,
+                height: int | None = None, source: dict | None = None,
+                indices: list[int] | None = None, stride: int = 1) -> dict:
+    """extrinsics: (S,3,4) w2c; intrinsics: (S,3,3). Returns a comfy-osh/poses/1 document.
+
+    indices: source-clip frame index of each solved frame (default i*stride); t = index / fps.
+    """
     ext = np.asarray(extrinsics, dtype=np.float64).reshape(-1, 3, 4)
     k = np.asarray(intrinsics, dtype=np.float64).reshape(-1, 3, 3)
     if len(ext) != len(k):
@@ -62,6 +66,12 @@ def build_poses(extrinsics, intrinsics, fps: float | None = None, width: int | N
         width = int(round(2 * k[0, 0, 2]))   # principal point is image centre in DA3
     if height is None:
         height = int(round(2 * k[0, 1, 2]))
+    if indices is None:
+        indices = [i * stride for i in range(len(ext))]
+    if len(indices) != len(ext):
+        raise ValueError("indices length differs from frame count")
+    if not fps or fps <= 0:
+        raise ValueError("fps must be > 0")
     frames, prev = [], None
     for i in range(len(ext)):
         c2w = w2c_to_threejs_c2w(ext[i])
@@ -71,7 +81,8 @@ def build_poses(extrinsics, intrinsics, fps: float | None = None, width: int | N
         prev = q
         fy = k[i, 1, 1]
         frames.append({
-            "index": i,
+            "index": int(indices[i]),
+            "t": float(indices[i]) / fps,
             "position": [float(x) for x in c2w[:3, 3]],
             "quaternion": [float(x) for x in q],
             "fov_v_deg": float(math.degrees(2 * math.atan(height / (2 * fy)))),
@@ -85,9 +96,9 @@ def build_poses(extrinsics, intrinsics, fps: float | None = None, width: int | N
             "transform": "camera-to-world", "units": "relative (non-metric), world = camera 0 frame",
         },
         "image": {"width": width, "height": height},
-        "fps": fps,
+        "fps": float(fps),
+        "solve_ok": len(frames) > 0,
         "source": source or {"model": "depth-anything-3", "mode": "multiview"},
-        "frame_count": len(frames),
         "frames": frames,
     }
 
@@ -98,11 +109,12 @@ def _load_da3_text(path: str, key: str):
 
 
 def main(argv: list[str]) -> int:
-    """python -m poses <extrinsics.txt> <intrinsics.txt> <out.json> [fps]  (Cloud text outputs)."""
+    """python poses.py <extrinsics.txt> <intrinsics.txt> <out.json> [fps=25] [stride=1]  (Cloud text outputs)."""
     ext = _load_da3_text(argv[1], "extrinsics")
     k = _load_da3_text(argv[2], "intrinsics")
-    fps = float(argv[4]) if len(argv) > 4 else None
-    doc = build_poses(ext, k, fps=fps)
+    fps = float(argv[4]) if len(argv) > 4 else 25.0
+    stride = int(argv[5]) if len(argv) > 5 else 1
+    doc = build_poses(ext, k, fps=fps, stride=stride)
     with open(argv[3], "w") as f:
         json.dump(doc, f, indent=2)
     return 0

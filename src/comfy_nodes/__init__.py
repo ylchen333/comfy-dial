@@ -1,4 +1,4 @@
-"""comfy-osh custom nodes (local mode only; Comfy Cloud cannot load custom nodes)."""
+"""comfy-osh custom nodes (local mode). Tested Oct 18: Comfy Cloud rejects the unpublished ComfyOSH_SaveCameraPosesJSON as unknown_class_type, while the pack workflow validates. Untested whether publishing to the Registry changes that."""
 import json
 import os
 
@@ -36,7 +36,7 @@ if io is not None:
 
             ext = da3_geometry["extrinsics"][0].detach().cpu().float().numpy()   # (S,3,4) w2c
             k = da3_geometry["intrinsics"][0].detach().cpu().float().numpy()     # (S,3,3)
-            doc = build_poses(ext, k, fps=fps or None)
+            doc = build_poses(ext, k, fps=fps or 25.0)
             out_dir, name, counter, sub, _ = folder_paths.get_save_image_path(
                 filename_prefix, folder_paths.get_output_directory())
             fname = f"{name}_{counter:05}_.json"

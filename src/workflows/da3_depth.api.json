@@ -1,0 +1,9 @@
+{
+  "1": {"class_type": "LoadVideo", "inputs": {"file": "PLACEHOLDER.mp4"}},
+  "2": {"class_type": "GetVideoComponents", "inputs": {"video": ["1", 0]}},
+  "3": {"class_type": "DownloadAndLoadDepthAnythingV3Model", "inputs": {"model": "da3_base.safetensors", "precision": "auto", "attention": "auto"}},
+  "4": {"class_type": "DepthAnythingV3_MultiView", "inputs": {"da3_model": ["3", 0], "normalization_mode": "Raw", "images": ["2", 0], "resize_method": "resize", "invert_depth": false, "keep_model_size": false}},
+  "5": {"class_type": "SaveImageAdvanced", "inputs": {"images": ["4", 0], "filename_prefix": "da3depth/depth", "format": "exr", "format.bit_depth": "32-bit float", "format.input_color_space": "linear"}},
+  "6": {"class_type": "SaveImageAdvanced", "inputs": {"images": ["4", 7], "filename_prefix": "da3depth/rgb", "format": "png", "format.bit_depth": "8-bit", "format.input_color_space": "sRGB"}},
+  "7": {"class_type": "SaveImageAdvanced", "inputs": {"images": ["4", 1], "filename_prefix": "da3depth/conf", "format": "exr", "format.bit_depth": "32-bit float", "format.input_color_space": "linear"}}
+}
