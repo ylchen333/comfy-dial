@@ -31,10 +31,20 @@ def qslerp(a, b, t):
     d = float(np.dot(a, b))
     if d < 0:
         b, d = -b, -d
-    if d > 0.9995:
+    if d > 0.999999:
         return qnormalize(a + t * (b - a))
     th = np.arccos(d)
-    return (np.sin((1 - t) * th) * a + np.sin(t * th) * b) / np.sin(th)
+    return qnormalize((np.sin((1 - t) * th) * a + np.sin(t * th) * b) / np.sin(th))
+
+
+def quat_to_mat(q):
+    """Rotation matrix of a unit [x, y, z, w] quaternion (camera-to-world)."""
+    x, y, z, w = q
+    return np.array([
+        [1 - 2 * (y * y + z * z), 2 * (x * y - z * w), 2 * (x * z + y * w)],
+        [2 * (x * y + z * w), 1 - 2 * (x * x + z * z), 2 * (y * z - x * w)],
+        [2 * (x * z - y * w), 2 * (y * z + x * w), 1 - 2 * (x * x + y * y)],
+    ])
 
 
 def umeyama(src, dst):

@@ -40,18 +40,20 @@ def quat_to_mat(q):
     ])
 
 
-def to_world(pos, quat, fov):
+def to_world(pos, quat, fov, step=1):
+    """Poses JSON in the arbitrary world, keeping every `step`-th frame."""
     A = quat_to_mat(WORLD_Q)
     frames = [
         {
             "index": i,
+            "t": i / 25,
             "position": (WORLD_S * A @ pos[i] + WORLD_B).tolist(),
             "quaternion": qnormalize(qmul(WORLD_Q, quat[i])).tolist(),
             "fov_v_deg": float(fov[i]),
         }
-        for i in range(len(pos))
+        for i in range(0, len(pos), step)
     ]
-    return {"schema": "comfy-osh/poses/1", "frames": frames}
+    return {"schema": "comfy-osh/poses/1", "fps": 25, "image": {"width": 448, "height": 252}, "solve_ok": True, "frames": frames}
 
 
 def perturb(kind, pos, quat, fov):
@@ -154,12 +156,15 @@ def test_fov_gate_can_be_disabled():
 
 def test_solve_failed_is_worst_not_dropped():
     shot = load("push_in")
-    r = score(shot, {"schema": "comfy-osh/poses/1", "frames": []}, "c")
+    r = score(shot, {"schema": "comfy-osh/poses/1", "fps": 25, "image": {"width": 8, "height": 8}, "solve_ok": False, "frames": []}, "c")
     assert not r.solveOk and not r.passed and r.composite is None and r.rotErrDeg is None
     ScoreReport.model_validate(r.model_dump(by_alias=True))
     nan = to_world(*sample_shot(shot))
     nan["frames"][5]["position"][0] = float("nan")
     assert not score(shot, nan, "c").solveOk
+    bad = to_world(*sample_shot(shot))
+    bad["solve_ok"] = False
+    assert not score(shot, bad, "c").solveOk
     assert not score(shot, {"solve_ok": False, "frames": []}, "c").solveOk
     assert not score(shot, None, "c").solveOk
 
@@ -181,3 +186,103 @@ def test_cli(tmp_path, capsys):
     out = json.loads(capsys.readouterr().out)
     ScoreReport.model_validate(out)
     assert out["pass"] is True
+
+
+CLIPS = SRC / "tests/golden/clips"
+META = sorted(CLIPS.glob("*.meta.json"))
+
+
+def _shot(d):
+    return Shot.model_validate_json(json.dumps(d))
+
+
+def _check_against_ts(shot, ref_poses):
+    pos, quat, fov = sample_shot(shot)
+    assert len(ref_poses) == shot.frames
+    for i, ref in enumerate(ref_poses):
+        assert pos[i] == pytest.approx(ref["position"], abs=1e-6)
+        q = np.array(ref["quaternion"])
+        assert min(np.abs(quat[i] - q).max(), np.abs(quat[i] + q).max()) < 1e-6
+        assert fov[i] == pytest.approx(ref["fov_v_deg"], abs=1e-6)
+
+
+@pytest.mark.parametrize("path", META, ids=lambda p: p.name)
+def test_sampler_matches_rig_core_clips(path):
+    d = json.loads(path.read_text())
+    _check_against_ts(_shot(d["shot"]), d["poses"])
+
+
+@pytest.mark.parametrize("path", sorted(SHOTS.glob("*.json")), ids=lambda p: p.name)
+def test_sampler_matches_rig_core_shot_fixtures(path):
+    d = json.loads(path.read_text())
+    shot = _shot(d)
+    # TS reference = the clip meta rendered from the same track (same shot id and track).
+    refs = [m for m in (json.loads(p.read_text()) for p in META) if m["shot"]["track"] == d["track"]]
+    assert refs, f"no clip meta carries {path.name}'s track"
+    _check_against_ts(shot, refs[0]["poses"])
+
+
+@pytest.mark.parametrize("name", NAMES)
+def test_subsampled_poses_still_near_zero(name):
+    shot = load(name)
+    r = score(shot, to_world(*sample_shot(shot), step=4), "c")
+    assert r.solveOk and r.rotErrDeg < 0.5 and r.fovErrDeg < 0.5
+    if r.mode == "full":
+        assert r.transErrPct < 1.0
+
+
+def test_full_length_unchanged():
+    shot = load("push_in")
+    a = score(shot, to_world(*sample_shot(shot)), "c")
+    assert a.composite < 1e-3 and a.passed
+
+
+def test_coverage_rule():
+    shot = load("push_in")
+    full = to_world(*sample_shot(shot))
+    # hold one source period at the end: ok; two: failed solve
+    ok = dict(full, frames=full["frames"][:-1])
+    assert score(shot, ok, "c").solveOk
+    short = dict(full, frames=full["frames"][:-2])
+    assert not score(shot, short, "c").solveOk
+    late = dict(full, frames=full["frames"][2:])
+    assert not score(shot, late, "c").solveOk
+    # subsampled by 4 and truncated by more than one 4-frame period
+    sub = to_world(*sample_shot(shot), step=4)
+    assert not score(shot, dict(sub, frames=sub["frames"][:-2]), "c").solveOk
+
+
+def test_floor(tmp_path, capsys):
+    from verifier.__main__ import main
+
+    poses_dir = tmp_path / "poses"
+    poses_dir.mkdir()
+    for i, m in enumerate(META):
+        d = json.loads(m.read_text())
+        clip = m.name[: -len(".meta.json")]
+        if i == 0:
+            continue  # missing poses file: reported as a failed solve, not dropped
+        w = to_world(*sample_shot(_shot(d["shot"])), step=1 if i % 2 else 4)
+        (poses_dir / f"{clip}.poses.json").write_text(json.dumps(w))
+    assert main(["floor", "--clips-dir", str(CLIPS), "--poses-dir", str(poses_dir)]) == 0
+    out = capsys.readouterr().out
+    rows = json.loads(out[out.index("[") :])
+    assert len(rows) == len(META)
+    assert not rows[0]["solveOk"]
+    assert all(r["solveOk"] and r["pass"] and r["composite"] < 1e-2 for r in rows[1:])
+    assert META[0].name[:-10] in out.split("\n\n")[0]
+
+
+def test_reversed_straight_dolly_fails():
+    """Fixed-orientation straight dolly vs the same path reversed: a free Sim(3) hides this."""
+    shot = load("push_in")
+    pos, quat, fov = sample_shot(shot)
+    quat = np.tile(quat[0], (len(quat), 1))
+    fov = np.full_like(fov, 40.0)
+    for k in shot.track:
+        k.quaternion = list(quat[0])
+        k.fov_v_deg = 40.0
+    good = score(shot, to_world(pos, quat, fov), "c")
+    bad = score(shot, to_world(pos[::-1], quat, fov), "c")
+    assert good.passed and good.transErrPct < 1e-3
+    assert bad.transErrPct > 40 and not bad.passed  # exactly 50: reversed is uncorrelated, so s = 0
