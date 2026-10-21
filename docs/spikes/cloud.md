@@ -81,3 +81,11 @@ Credits: 7376 -> 7357 for both takes (about 19, roughly 9 to 10 each). Files: `s
 Read: LTX follows both guides. Dolly zoom: person constant size; tower, mountains and hut shrink and pull inward, tower base moves toward centre. Control: person
 grows about 1.7x, background grows slowly. Rough finding: the model reproduces framing and scale of the guide, so a verifier measuring subject-vs-background scale ratio can separate the two.
 Caveat: the two takes have different people (seed same, guide differs), and take content (eg the mountain became a pyramid) is prompt-dependent.
+
+## Follow-up: real zoom-only take (static camera at distance 5, f x1.667)
+
+Guide `zoom_guide.mp4` (mkguide.py mode `zoom`): person head height ratio last/first 1.667; far mountain peak height 1.678 (dolly_control: 1.035).
+Take prompt_id `7c957bed-7639-46e9-b6b2-9ef251e84f52` (seed 42, strength 1.0, same prompt), 239 s wall (queue), 10 credits (7344 -> 7334).
+Files: `src/workflows/out/zoom_{guide,take}.mp4`, `zoom_sheet.png`. Poses: DA3 base job `b1b9c4dd-701b-4099-989b-1169b16d8529`
+(6 s, 0 visible credits), saved as `src/tests/golden/da3_poses_real_base/zoom_5to3.poses.json` (stride 4, fps 25, index = source frame, t = index/25).
+Note: `comfy_nodes/poses.py` output lacks `solve_ok`/per-frame `t` that the Poses contract requires and carries a `frame_count` the contract forbids; the file was post-processed to fit.

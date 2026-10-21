@@ -1,5 +1,24 @@
 {
   "spike-cloud-take-0-seed42": "6711e8b5-8ccf-4eed-a5cb-8ecba9262909",
   "spike-cloud-dollyzoom-seed42": "7565f1a4-b961-43f4-869a-6b1972caf48c",
-  "spike-cloud-dolly-control-seed42": "cb2adc39-dcb5-4c8c-93b9-78307ba3fcc6"
+  "spike-cloud-dolly-control-seed42": "cb2adc39-dcb5-4c8c-93b9-78307ba3fcc6",
+  "spike-cloud-zoom-seed42": "7c957bed-7639-46e9-b6b2-9ef251e84f52",
+  "spike-cloud-dolly-control-seed43": "9112c818-6021-48a8-a460-3c8d539539b7",
+  "spike-cloud-dollyzoom-seed43": "02e4884e-4e1a-485e-af9a-6425a2bca58c",
+  "spike-cloud-zoom-seed43": "e8914116-e501-4e2a-94bb-9fa8f113814f",
+  "spike-cloud-dolly-control-seed44": "8f62b85d-1f7b-4153-8eeb-319a42119ea6",
+  "spike-cloud-dollyzoom-seed44": "d9fdcfb3-782a-4ba2-9b0a-b6eb37302b3e",
+  "spike-cloud-zoom-seed44": "8ac98f8a-2bd7-4aa9-8b99-354997546bee",
+  "spike-cloud-neg-noguide-s42": "05c7b732-9848-4699-aafc-37d6d730ca7a",
+  "spike-cloud-neg-noguide-s43": "3a93ea0b-1bd7-4668-ad3e-6030f2f4f1db",
+  "spike-cloud-neg-weak-s42": "cd6ce724-6238-4370-ab50-97c5360234e4",
+  "spike-cloud-neg-weak-s43": "aacb108a-16e5-4c9e-b2ba-f79cf01a0223",
+  "spike-cloud-neg-reversed-s42": "643afb1f-6bc5-48f5-80e0-717ca3ef5fe0",
+  "spike-cloud-neg-halfamp-s42": "a7bfb8e3-02f6-44ce-b5bb-0c0dd6c978bf",
+  "spike-cloud-scene2-dolly-seed42": "66de01da-9e72-4d2a-958c-9c2d59aab2d9",
+  "spike-cloud-scene2-dollyzoom-seed42": "54e2b462-915e-42c1-8d80-91e4d5ce22bd",
+  "spike-cloud-scene2-zoom-seed42": "170896d4-b195-4cbb-82ce-34f51c477d81",
+  "spike-cloud-scene2-dolly-seed43": "cd128b3d-e05e-426d-ab34-35720b993c79",
+  "spike-cloud-scene2-dollyzoom-seed43": "d54f2a73-75be-46ef-bf03-02910a90e40d",
+  "spike-cloud-scene2-zoom-seed43": "76c82d77-b6fa-49c8-8188-40079e52afaf"
 }
