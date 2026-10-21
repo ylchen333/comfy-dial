@@ -1,6 +1,7 @@
-"""Sample a Shot's keyframe track to one pose per frame (t = i / fps).
+"""Sample keyframes to poses at given times. Matches rig-core's sampler.ts.
 
-Linear position and FOV, slerp rotation. Must match rig-core's sampler.
+Position linear, rotation shortest-arc slerp, FOV linear in cot(fov/2) (so a
+linear dolly plus a linear focal ramp is an exact dolly zoom). Held outside the key range.
 """
 
 import numpy as np
@@ -8,17 +9,37 @@ import numpy as np
 from .geom import qnormalize, qslerp
 
 
-def sample_shot(shot):
-    ts = np.array([k.t for k in shot.track])
-    P = np.array([k.position for k in shot.track], float)
-    Q = [qnormalize(np.array(k.quaternion, float)) for k in shot.track]
-    F = np.array([k.fov_v_deg for k in shot.track], float)
+def _cot(fov_deg):
+    return 1 / np.tan(np.radians(fov_deg) / 2)
+
+
+def _fov(cot):
+    return float(np.degrees(2 * np.arctan(1 / cot)))
+
+
+def interpolate(ts, P, Q, F, times):
+    """Interpolate (positions, unit quats, fov deg) keyed by increasing `ts` at `times`."""
+    ts, P, F = np.asarray(ts, float), np.asarray(P, float), np.asarray(F, float)
+    Q = [qnormalize(np.asarray(q, float)) for q in Q]
+    C = _cot(F)
     pos, quat, fov = [], [], []
-    for i in range(shot.frames):
-        t = min(max(i / shot.fps, ts[0]), ts[-1])
-        j = min(int(np.searchsorted(ts, t, side="right")) - 1, len(ts) - 2)
-        u = (t - ts[j]) / (ts[j + 1] - ts[j])
-        pos.append(P[j] + u * (P[j + 1] - P[j]))
-        quat.append(qslerp(Q[j], Q[j + 1], u))
-        fov.append(F[j] + u * (F[j + 1] - F[j]))
+    for t in times:
+        if len(ts) == 1 or t <= ts[0]:
+            j, u = 0, 0.0
+        elif t >= ts[-1]:
+            j, u = len(ts) - 2, 1.0
+        else:
+            j = int(np.searchsorted(ts, t, side="left")) - 1
+            u = (t - ts[j]) / (ts[j + 1] - ts[j])
+        k = min(j + 1, len(ts) - 1)
+        pos.append(P[j] + u * (P[k] - P[j]))
+        quat.append(qslerp(Q[j], Q[k], u) if k != j else Q[j])
+        fov.append(_fov(C[j] + u * (C[k] - C[j])))
     return np.array(pos), np.array(quat), np.array(fov)
+
+
+def sample_shot(shot):
+    k = shot.track
+    times = [i / shot.fps for i in range(shot.frames)]
+    return interpolate([x.t for x in k], [x.position for x in k], [x.quaternion for x in k],
+                       [x.fov_v_deg for x in k], times)

@@ -18,7 +18,19 @@ def main(argv=None):
     sc.add_argument("--poses", required=True)
     sc.add_argument("--candidate-id")
     sc.add_argument("--no-fov-gate", action="store_true", help="report FOV error but keep it out of pass/composite")
+    fl = sub.add_parser("floor", help="score recovered poses for every golden clip (noise floor)")
+    fl.add_argument("--clips-dir", required=True)
+    fl.add_argument("--poses-dir", required=True)
+    fl.add_argument("--no-fov-gate", action="store_true")
     a = ap.parse_args(argv)
+    if a.cmd == "floor":
+        from .floor import floor, table
+
+        rows = floor(a.clips_dir, a.poses_dir, fov_gate=not a.no_fov_gate)
+        print(table(rows))
+        print()
+        print(json.dumps(rows, indent=2))
+        return 0
     shot = Shot.model_validate_json(Path(a.shot).read_text())
     try:
         poses = json.loads(Path(a.poses).read_text())

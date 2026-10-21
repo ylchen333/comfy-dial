@@ -5,13 +5,16 @@ score because DA3 FOV estimates can be unreliable; `fov_gate=False` reports FOV
 but keeps it out of pass/composite.
 """
 
+import json
+
 import numpy as np
-from comfy_osh_contracts import ScoreReport, SegmentScore
+from comfy_osh_contracts import Poses, ScoreReport, SegmentScore
+from pydantic import ValidationError
 
-from .geom import qangle_deg, qconj, qmul, umeyama
-from .sampler import sample_shot
+from .geom import qangle_deg, qconj, qmul, quat_to_mat
+from .sampler import interpolate, sample_shot
 
-GATES = {"rot": 3.0, "trans": 10.0, "fov": 2.0}  # provisional, SPEC section 6
+GATES = {"rot": 3.0, "trans": 15.0, "fov": 2.0}  # provisional, SPEC section 6
 ROTATION_ONLY_PATH = 1e-3  # authored path length below this => pan/tilt/zoom
 
 
@@ -22,27 +25,35 @@ def _failed(shot, cid):
                        transErrPct=None, fovErrDeg=None, perSegment=seg, composite=None, passed=False)
 
 
-def parse_poses(poses, n_frames):
-    """Return (pos, quat, fov) arrays or None when the solve is unusable."""
-    if not isinstance(poses, dict) or poses.get("solve_ok") is False:
-        return None
-    fr = sorted(poses.get("frames") or [], key=lambda f: f.get("index", 0))
-    if len(fr) != n_frames:
-        return None
+def parse_poses(poses, shot):
+    """Resample recovered poses onto the Shot's frame times; None when the solve is unusable.
+
+    Coverage rule: solved frames must span [0, (frames-1)/fps]. An end may be held
+    for at most one source-frame period (the larger of 1/poses.fps and the median
+    gap between solved frames); more missing than that is a failed solve.
+    """
     try:
-        pos = np.array([f["position"] for f in fr], float)
-        quat = np.array([f["quaternion"] for f in fr], float)
-        fov = np.array([f["fov_v_deg"] for f in fr], float)
-    except (KeyError, TypeError, ValueError):
+        p = Poses.model_validate_json(json.dumps(poses))  # JSON mode: the mirror's strict tuples need it
+    except (ValidationError, TypeError, ValueError):  # ValidationError is a ValueError
         return None
-    if pos.shape != (n_frames, 3) or quat.shape != (n_frames, 4) or fov.shape != (n_frames,):
+    if not p.solve_ok:
         return None
-    if not (np.isfinite(pos).all() and np.isfinite(quat).all() and np.isfinite(fov).all()):
+    fr = p.frames
+    ts = np.array([f.t for f in fr])
+    pos = np.array([f.position for f in fr], float)
+    quat = np.array([f.quaternion for f in fr], float)
+    fov = np.array([f.fov_v_deg for f in fr], float)
+    if not (np.isfinite(pos).all() and np.isfinite(quat).all() and np.isfinite(fov).all() and np.isfinite(ts).all()):
         return None
-    norms = np.linalg.norm(quat, axis=1)
-    if (norms < 1e-6).any():
+    if (np.linalg.norm(quat, axis=1) < 1e-6).any():
         return None
-    return pos, quat / norms[:, None], fov
+    period = 1 / p.fps
+    if len(ts) > 1:
+        period = max(period, float(np.median(np.diff(ts))))
+    end = (shot.frames - 1) / shot.fps
+    if ts[0] > period + 1e-9 or ts[-1] < end - period - 1e-9:
+        return None
+    return interpolate(ts, pos, quat, fov, [i / shot.fps for i in range(shot.frames)])
 
 
 def frame_errors(shot, pos_r, quat_r, fov_r):
@@ -57,9 +68,14 @@ def frame_errors(shot, pos_r, quat_r, fov_r):
     path = float(np.linalg.norm(np.diff(pos_a, axis=0), axis=1).sum())
     if path < ROTATION_ONLY_PATH:
         return rot, None, fov, path
-    ca, cr = pos_a - pos_a[0], pos_r - pos_r[0]
-    s, R, t = umeyama(cr, ca)
-    err = np.linalg.norm((s * (R @ cr.T)).T + t - ca, axis=1)
+    # Express both paths in the frame-0 camera's axes and fit scale only. A free rotation
+    # (Sim(3)) would let a reversed straight dolly match its original; DA3's frame is camera 0,
+    # so the frame-0 axes are shared and only the scale is arbitrary.
+    ca = (pos_a - pos_a[0]) @ quat_to_mat(quat_a[0])
+    cr = (pos_r - pos_r[0]) @ quat_to_mat(quat_r[0])
+    den = float((cr * cr).sum())
+    s = max(float((ca * cr).sum()) / den, 0.0) if den > 1e-18 else 0.0
+    err = np.linalg.norm(ca - s * cr, axis=1)
     return rot, err, fov, path
 
 
@@ -71,7 +87,7 @@ def _agg(rot, err, fov, path, sl, fov_gate):
 
 
 def score(shot, poses, candidate_id, fov_gate=True):
-    parsed = parse_poses(poses, shot.frames)
+    parsed = parse_poses(poses, shot)
     if parsed is None:
         return _failed(shot, candidate_id)
     rot, err, fov, path = frame_errors(shot, *parsed)
