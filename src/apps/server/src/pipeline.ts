@@ -15,6 +15,7 @@ export interface LoopOptions {
   packet: ControlPacket;
   guidePath: string;
   prompt: string;
+  allowUnguided?: boolean | undefined;
   n: number;
   seedBase: number;
   outDir: string;
@@ -75,7 +76,7 @@ export async function runLoop(o: LoopOptions): Promise<Ranked<TakeOutcome>[]> {
   log(`guide uploaded as ${guideFile}`);
 
   const seeds = Array.from({ length: o.n }, (_, i) => o.seedBase + i);
-  const graphs = seeds.map((seed) => buildTakeGraph({ shot: o.shot, packet: o.packet, guideFile, prompt: o.prompt, seed }));
+  const graphs = seeds.map((seed) => buildTakeGraph({ shot: o.shot, packet: o.packet, guideFile, prompt: o.prompt, seed, allowUnguided: o.allowUnguided }));
 
   // Fan-out: N submit() calls. Every key hits the store before any job is awaited.
   const firstIds = await Promise.all(

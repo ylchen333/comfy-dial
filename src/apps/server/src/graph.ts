@@ -32,6 +32,8 @@ export interface TakeParams {
   guideFile: string;
   prompt: string;
   seed: number;
+  /** Negative-control only: allow strength 0 (LTX then ignores the guide and the take is unguided). */
+  allowUnguided?: boolean | undefined;
 }
 
 export function buildTakeGraph(p: TakeParams): Graph {
@@ -40,7 +42,7 @@ export function buildTakeGraph(p: TakeParams): Graph {
   if (!Number.isInteger(seed) || seed < 0) throw new Error(`seed must be a non-negative integer, got ${seed}`);
   if (packet.shotId !== shot.id) throw new Error(`ControlPacket is for ${packet.shotId}, Shot is ${shot.id}`);
   // LTX ignores the guide only at strength 0.0, so 0 would silently produce an unguided take.
-  if (!(packet.iclora.strength > 0)) throw new Error("iclora.strength must be > 0 (LTX ignores the guide at 0.0)");
+  if (!(packet.iclora.strength > 0) && !p.allowUnguided) throw new Error("iclora.strength must be > 0 (LTX ignores the guide at 0.0); pass allowUnguided for a negative control");
   const lora = packet.iclora.name.endsWith(".safetensors") ? packet.iclora.name : `${packet.iclora.name}.safetensors`;
 
   const g = loadTemplate("ltx25_union_depth.api.json");

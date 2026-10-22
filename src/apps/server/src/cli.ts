@@ -55,6 +55,7 @@ async function main() {
       "seed-base": { type: "string", default: "1000" },
       out: { type: "string" },
       "resubmit-pending": { type: "boolean", default: false },
+      "allow-unguided": { type: "boolean", default: false },
     },
   });
   if (!a.shot) die("usage: pnpm loop --shot <shot.json> --n <k> [--live]");
@@ -69,6 +70,7 @@ async function main() {
   const guide = a.guide ? { path: resolve(CWD, a.guide), near: 1, far: 100 } : findGuide(shot.id);
   if (!guide) die(`no depth guide for ${shot.id}: pass --guide <depth.mp4> or run pnpm --filter @comfy-osh/rig-core render:golden`);
   if (!existsSync(guide!.path)) die(`guide missing: ${guide!.path}\nrun: pnpm --filter @comfy-osh/rig-core render:golden (needs ffmpeg)`);
+  if (Number(a.strength) === 0 && !a["allow-unguided"]) die("--strength 0 gives an unguided take (negative control); add --allow-unguided to confirm");
   const packet = ControlPacket.parse({
     shotId: shot.id,
     depthVideo: guide!.path,
@@ -84,7 +86,7 @@ async function main() {
   console.log(`shot: ${shot.id}  frames: ${shot.frames}  n: ${n}  guide: ${guide!.path}`);
   console.log(`estimated cost: ${est} credits (${n} x (${CREDITS_PER_TAKE} take + ${CREDITS_PER_DA3} DA3) + ${COLD_START_CREDITS} cold start)${live ? "" : " if run live; this run spends 0"}`);
 
-  const outDir = a.out ? resolve(CWD, a.out) : resolve(here, "..", ".runs", mode, shot.id);
+  const outDir = a.out ? resolve(CWD, a.out) : resolve(here, "..", ".runs", mode, a["allow-unguided"] ? `${shot.id}-unguided` : shot.id);
   let client: ComfyClient;
   let tools: Tools = realTools;
   let cloud: CliComfyClient | null = null;
@@ -104,7 +106,7 @@ async function main() {
   if (before !== null) console.log(`credits before: ${before}`);
   const store = new JobStore(join(outDir, "jobs.json"));
   const ranked = await runLoop({
-    shot, shotPath, packet, guidePath: guide!.path, prompt: a.prompt!, n,
+    shot, shotPath, packet, guidePath: guide!.path, prompt: a.prompt!, allowUnguided: a["allow-unguided"]!, n,
     seedBase: Number(a["seed-base"]), outDir, client, store, tools,
     resubmitPending: a["resubmit-pending"]!,
     log: (m) => console.log(m),

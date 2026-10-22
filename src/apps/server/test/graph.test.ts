@@ -23,6 +23,10 @@ describe("buildTakeGraph", () => {
   it("uses only pack/core nodes, no custom ComfyOSH node and no partner nodes", () => {
     for (const n of Object.values(g)) expect(n.class_type).not.toMatch(/ComfyOSH|LtxApi/);
   });
+  it("allows strength 0 only with allowUnguided (negative control)", () => {
+    const g0 = buildTakeGraph({ shot, packet: packetFor(shot, 0), guideFile: "a", prompt: "p", seed: 1, allowUnguided: true });
+    expect(g0["12"]!.inputs.strength).toBe(0);
+  });
   it("refuses strength 0 (LTX would ignore the guide) and bad seeds", () => {
     expect(() => buildTakeGraph({ shot, packet: packetFor(shot, 0), guideFile: "a", prompt: "p", seed: 1 })).toThrow(/strength/);
     expect(() => buildTakeGraph({ shot, packet: packetFor(shot), guideFile: "a", prompt: "p", seed: -1 })).toThrow(/seed/);
