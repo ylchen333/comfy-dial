@@ -33,3 +33,14 @@ Result on the labelled set: 15 of 15 positives pass; 8 of 9 failures are caught.
 - **Zoom-only passes an authored dolly zoom.** With translation ungated on FOV-changing shots and FOV ungated, a take that only zooms (camera still) passes a dolly-zoom shot; a dolly take also passes a zoom shot. Only the advisory `classify` label catches either, and its margin is thin. So a dolly-zoom shot is verified for rotation and move class only. The synthetic `dolly_zoom` / `zoom_no_dolly` case is exempt from the "must fail" assertion for this reason (its composite is still worse than the exact path).
 - `neg_weak` (strength 0.3) was excluded: LTX still followed the full dolly.
 - Re-run `python -m verifier floor` and the table in this file whenever DA3, the model size or the guide changes.
+
+## First real run through `pnpm loop` (Oct 22, `push_in`, DA3 Base, frozen gates)
+
+| Takes | Guide | Pass | Composite | Rot ° | Trans % | Drift segments |
+|---|---|---|---|---|---|---|
+| seeds 1000–1003 | on (strength 1.0) | 4 of 4 | 0.21–0.33 | 0.68–1.04 | 2.1–3.4 | none |
+| seeds 2000, 2001 | off (`--strength 0 --allow-unguided`) | 0 of 2 | 2.86–2.96 | 4.28–5.89 | 45–50 | all three |
+
+Cost: 17 credits for the two unguided takes plus DA3 (estimate 18); about 19–21 for the four guided takes plus DA3. Cloud billing for the guided run appeared several minutes late.
+
+Limits: n = 2 failures, one shot, one failure mode (guide off, near-static camera, scene also changes). This is the easy negative; subtle failures such as `neg_halfamp` are still not caught. The ranking was shown within each run, not in one mixed table.
