@@ -5,7 +5,11 @@
   "exports": { ".": "./src/index.ts" },
   "scripts": {
     "typecheck": "tsc -p tsconfig.json",
-    "test": "tsc -p tsconfig.json && vitest run --passWithNoTests"
+    "test": "tsc -p tsconfig.json && vitest run --passWithNoTests",
+    "loop": "node --experimental-strip-types --no-warnings src/cli.ts"
   },
-  "dependencies": { "@comfy-osh/contracts": "workspace:*" }
+  "dependencies": {
+    "@comfy-osh/contracts": "workspace:*",
+    "@comfy-osh/rig-core": "workspace:*"
+  }
 }
