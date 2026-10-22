@@ -118,7 +118,7 @@ async function main() {
 
   console.log(`\nranked takes (${client.label})`);
   console.log(formatTable(ranked.map((r) => ({ rank: r.rank, item: r.item }))));
-  console.log("\n* FOV is reported, not gated. Gates: rot < 2.75 deg; trans < 12% only when the authored focal ratio is within 10% of 1.");
+  console.log("\n* FOV is reported, not gated. Gates: rot < 2.75 deg; trans < 12% only when the authored focal ratio is within 10% of 1.\n* move = advisory focal-change class (none/in/out) vs authored; MISMATCH does not change pass/fail.");
   const disagree = ranked.filter((r) => r.item.report.solveOk && r.item.report.pass !== r.item.verdict.pass);
   if (disagree.length) console.log(`note: verifier pass differs from the frozen gate for ${disagree.map((r) => r.item.id).join(", ")} (verifier build may still carry provisional gates).`);
   if (!live) console.log("DRY-RUN: poses are synthetic (seed % 4: follows, follows+jitter, yaw drift, no solve). Not a measurement.");

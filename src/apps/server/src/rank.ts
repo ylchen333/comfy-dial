@@ -14,6 +14,17 @@ export function authoredFocalRatio(shot: Pick<Shot, "track">): number {
   return cotHalf(last.fov_v_deg) / cotHalf(first.fov_v_deg);
 }
 
+export type MoveClass = "none" | "in" | "out";
+/** Advisory band from docs/calibration.md: 'none' if 0.956 <= r <= 1.046, 'in' above (FOV narrows), 'out' below. */
+export const classOfRatio = (r: number): MoveClass => (r > 1.046 ? "in" : r < 0.956 ? "out" : "none");
+export interface MoveCheck { authored: MoveClass; recovered: MoveClass; match: boolean }
+export function moveCheck(shot: Pick<Shot, "track">, poses: { solve_ok: boolean; frames: { fov_v_deg: number }[] }): MoveCheck | undefined {
+  if (!poses.solve_ok || poses.frames.length < 2) return undefined;
+  const authored = classOfRatio(authoredFocalRatio(shot));
+  const recovered = classOfRatio(cotHalf(poses.frames[poses.frames.length - 1]!.fov_v_deg) / cotHalf(poses.frames[0]!.fov_v_deg));
+  return { authored, recovered, match: authored === recovered };
+}
+
 export const transGated = (shot: Pick<Shot, "track">) =>
   Math.abs(authoredFocalRatio(shot) - 1) <= FROZEN_GATES.zoomRatioBand;
 
@@ -72,10 +83,12 @@ export interface TableRow extends Rankable {
   id: string;
   seed: number;
   note?: string | undefined;
+  /** Advisory only: does the recovered focal change match the authored move class? */
+  move?: MoveCheck | undefined;
 }
 
 export function formatTable(rows: Ranked<TableRow>[]): string {
-  const head = ["rank", "take", "seed", "pass", "composite", "rot deg", "trans %", "fov deg*", "drift segs", "note"];
+  const head = ["rank", "take", "seed", "pass", "composite", "rot deg", "trans %", "fov deg*", "drift segs", "move*", "note"];
   const body = rows.map(({ rank, item: r }) => [
     String(rank),
     r.id,
@@ -86,6 +99,7 @@ export function formatTable(rows: Ranked<TableRow>[]): string {
     f(r.report.transErrPct),
     f(r.report.fovErrDeg),
     r.report.solveOk ? (r.verdict.badSegments.length ? r.verdict.badSegments.join(",") : "-") : "all",
+    r.move ? (r.move.match ? `${r.move.recovered} ok` : `${r.move.authored}->${r.move.recovered} MISMATCH`) : "-",
     r.note ?? "",
   ]);
   const all = [head, ...body];

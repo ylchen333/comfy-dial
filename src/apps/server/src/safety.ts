@@ -4,7 +4,7 @@
 export const CREDITS_PER_TAKE = 4;
 export const CREDITS_PER_DA3 = 1;
 export const COLD_START_CREDITS = 8;
-export const MAX_LIVE_TAKES = 4;
+export const MAX_LIVE_TAKES = 5;
 export const MAX_LIVE_CREDITS = 60;
 
 export const estimateCredits = (n: number) => n * (CREDITS_PER_TAKE + CREDITS_PER_DA3) + COLD_START_CREDITS;

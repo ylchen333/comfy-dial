@@ -6,7 +6,7 @@ import { loadShot } from "./helpers.ts";
 
 describe("live safety", () => {
   it("refuses n > 4, missing key, and n < 1", () => {
-    expect(liveRefusal(5, "k")).toMatch(/exceeds the cap of 4/);
+    expect(liveRefusal(6, "k")).toMatch(/exceeds the cap of 5/);
     expect(liveRefusal(1, undefined)).toMatch(/COMFY_API_KEY/);
     expect(liveRefusal(0, "k")).toMatch(/positive integer/);
   });

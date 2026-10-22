@@ -5,7 +5,7 @@ import { basename, join } from "node:path";
 import { Poses, ScoreReport, type ControlPacket, type Shot } from "@comfy-osh/contracts";
 import { isTransientError, type ComfyClient, type Graph } from "./client.ts";
 import { buildPoseGraph, buildTakeGraph } from "./graph.ts";
-import { rankTakes, verdict, type Ranked, type TableRow } from "./rank.ts";
+import { moveCheck, rankTakes, verdict, type Ranked, type TableRow } from "./rank.ts";
 import { idempotencyKey, submitOnce, type JobStore } from "./store.ts";
 import { POSE_STRIDE, type Tools } from "./tools.ts";
 
@@ -157,10 +157,10 @@ async function chain(
       log(`  ${id}: pose conversion produced no usable solve; recording solve_ok=false`);
       writeFileSync(posesPath, JSON.stringify({ schema: "comfy-osh/poses/1", fps: o.shot.fps, image: o.shot.resolution, solve_ok: false, frames: [] }));
     }
-    Poses.parse(JSON.parse(readFileSync(posesPath, "utf8"))); // throws if the conversion output drifts from the contract
+    const posesDoc = Poses.parse(JSON.parse(readFileSync(posesPath, "utf8"))); // throws if the conversion output drifts from the contract
     const report = await o.tools.score(o.shotPath, posesPath, id);
     o.store.patchTake(id, { poses: posesPath, report });
-    return { id, seed, report, verdict: verdict(report, o.shot), takeJobId, daJobId, note: report.solveOk ? undefined : "solve failed" };
+    return { id, seed, report, verdict: verdict(report, o.shot), takeJobId, daJobId, note: report.solveOk ? undefined : "solve failed", move: moveCheck(o.shot, posesDoc) };
   } catch (e) {
     return fail(`error: ${(e as Error).message}`, takeJobId, daJobId);
   }
