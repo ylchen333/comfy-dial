@@ -12,9 +12,14 @@ from comfy_osh_contracts import Poses, ScoreReport, SegmentScore
 from pydantic import ValidationError
 
 from .geom import qangle_deg, qconj, qmul, quat_to_mat
+from .moveclass import focal_ratio
 from .sampler import interpolate, sample_shot
 
-GATES = {"rot": 3.0, "trans": 15.0, "fov": 2.0}  # provisional, SPEC section 6
+# Frozen in docs/calibration.md. FOV is reported, never gated by default (floor 1.4-8 deg on a perfect
+# camera); its 2 deg value only applies when the gate is switched on. Translation is gated only when
+# the authored focal ratio is within TRANS_GATE_RATIO_TOL of 1 (zoom shots make DA3 trade focal for travel).
+GATES = {"rot": 2.75, "trans": 12.0, "fov": 2.0}
+TRANS_GATE_RATIO_TOL = 0.10
 ROTATION_ONLY_PATH = 1e-3  # authored path length below this => pan/tilt/zoom
 
 
@@ -79,19 +84,20 @@ def frame_errors(shot, pos_r, quat_r, fov_r):
     return rot, err, fov, path
 
 
-def _agg(rot, err, fov, path, sl, fov_gate):
+def _agg(rot, err, fov, path, sl, fov_gate, trans_gate=True):
     r, f = float(rot[sl].mean()), float(fov[sl].mean())
     tr = None if err is None else float(err[sl].mean() / path * 100)
-    ok = r < GATES["rot"] and (tr is None or tr < GATES["trans"]) and (not fov_gate or f < GATES["fov"])
+    ok = r < GATES["rot"] and (tr is None or not trans_gate or tr < GATES["trans"]) and (not fov_gate or f < GATES["fov"])
     return r, tr, f, bool(ok)
 
 
-def score(shot, poses, candidate_id, fov_gate=True):
+def score(shot, poses, candidate_id, fov_gate=False):
     parsed = parse_poses(poses, shot)
     if parsed is None:
         return _failed(shot, candidate_id)
     rot, err, fov, path = frame_errors(shot, *parsed)
-    r, tr, f, ok = _agg(rot, err, fov, path, slice(None), fov_gate)
+    trans_gate = abs(focal_ratio(shot) - 1) <= TRANS_GATE_RATIO_TOL
+    r, tr, f, ok = _agg(rot, err, fov, path, slice(None), fov_gate, trans_gate)
     terms = [r / GATES["rot"]]
     if tr is not None:
         terms.append(tr / GATES["trans"])
@@ -99,14 +105,14 @@ def score(shot, poses, candidate_id, fov_gate=True):
         terms.append(f / GATES["fov"])
     segs = []
     for s in shot.segments:
-        sr, st, sf, sok = _agg(rot, err, fov, path, slice(s.start, s.end), fov_gate)
+        sr, st, sf, sok = _agg(rot, err, fov, path, slice(s.start, s.end), fov_gate, trans_gate)
         segs.append(SegmentScore(start=s.start, end=s.end, rotErrDeg=sr, transErrPct=st, fovErrDeg=sf, passed=sok))
     return ScoreReport(candidateId=candidate_id, solveOk=True, mode="full" if err is not None else "rotation_only",
                        rotErrDeg=r, transErrPct=tr, fovErrDeg=f, perSegment=segs,
                        composite=float(sum(terms) / len(terms)), passed=ok)
 
 
-def drivers(rep, fov_gate=True):
+def drivers(rep, fov_gate=False, trans_gate=True):
     """Human-readable line: which gate(s) decided pass/fail."""
     if not rep.solveOk:
         return "solveOk=false: worst rank, pass=false"
@@ -116,6 +122,7 @@ def drivers(rep, fov_gate=True):
         if v is None:
             continue
         g = GATES[name]
-        note = " (reported, not gating)" if name == "fov" and not fov_gate else ""
+        off = (name == "fov" and not fov_gate) or (name == "trans" and not trans_gate)
+        note = " (reported, not gating)" if off else ""
         out.append(f"{name}={v:.3g}{'<' if v < g else '>='}{g:g}{note}")
     return f"pass={rep.passed} [{rep.mode}] " + " ".join(out)
