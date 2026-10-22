@@ -160,7 +160,7 @@ Source of truth: JSON Schema in `src/packages/contracts/schema/`. TS (zod) and P
 7. Pan/tilt shots (path length ≈ 0): rotation-only mode.
 8. Pose solve fails → `solveOk=false`, worst rank. Never drop silently.
 
-**Provisional pass gate** (calibrate on golden set in M0, then freeze): rot < 3°, trans < 10%, fov < 2°.
+**Pass gate (frozen Oct 22, evidence in `docs/calibration.md`):** rot < 2.75°; trans < 12%, applied only when the authored focal ratio is within 10% of 1 (translation is unreliable on FOV-changing shots, even on rendered footage); absolute FOV error is reported, not gated (it sits at 1.4–8.2° on a perfect camera). Advisory move-class label from the focal ratio, see calibration doc.
 
 **Calibration decision (Oct 18): calibrate once, then freeze.**
 1. Noise floor: score DA3 on the RGB golden clips (known-perfect camera). No threshold may sit below the error measured there.
