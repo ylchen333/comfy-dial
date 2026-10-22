@@ -11,7 +11,7 @@ import { loadEnvFile } from "./env.ts";
 import { MockClient } from "./mock-client.ts";
 import { runLoop } from "./pipeline.ts";
 import { formatTable } from "./rank.ts";
-import { CREDITS_PER_DA3, CREDITS_PER_TAKE, MAX_LIVE_CREDITS, MAX_LIVE_TAKES, estimateCredits, liveRefusal } from "./safety.ts";
+import { COLD_START_CREDITS, CREDITS_PER_DA3, CREDITS_PER_TAKE, MAX_LIVE_CREDITS, MAX_LIVE_TAKES, estimateCredits, liveRefusal } from "./safety.ts";
 import { JobStore } from "./store.ts";
 import { copyDecimate, POSE_STRIDE, realTools, SRC_DIR, type Tools } from "./tools.ts";
 
@@ -82,7 +82,7 @@ async function main() {
   const est = estimateCredits(n);
   console.log(`mode: ${live ? "LIVE (Comfy Cloud)" : "DRY-RUN (mock client, synthetic poses, no credits)"}`);
   console.log(`shot: ${shot.id}  frames: ${shot.frames}  n: ${n}  guide: ${guide!.path}`);
-  console.log(`estimated cost: ${est} credits (${n} x (${CREDITS_PER_TAKE} take + ${CREDITS_PER_DA3} DA3))${live ? "" : " if run live; this run spends 0"}`);
+  console.log(`estimated cost: ${est} credits (${n} x (${CREDITS_PER_TAKE} take + ${CREDITS_PER_DA3} DA3) + ${COLD_START_CREDITS} cold start)${live ? "" : " if run live; this run spends 0"}`);
 
   const outDir = a.out ? resolve(CWD, a.out) : resolve(here, "..", ".runs", mode, shot.id);
   let client: ComfyClient;
@@ -111,7 +111,7 @@ async function main() {
   });
   if (cloud) {
     const after = await cloud.credits();
-    if (before !== null && after !== null) console.log(`credits after: ${after}  spent: ${before - after}`);
+    if (before !== null && after !== null) console.log(`credits after: ${after}  change so far: ${before - after} (Cloud billing can lag several minutes; re-check the balance later)`);
   }
 
   console.log(`\nranked takes (${client.label})`);

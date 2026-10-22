@@ -13,7 +13,7 @@ describe("live safety", () => {
   it("allows n=1..4 and estimates cost", () => {
     expect(liveRefusal(1, "k")).toBeNull();
     expect(liveRefusal(4, "k")).toBeNull();
-    expect(estimateCredits(4)).toBe(48);
+    expect(estimateCredits(4)).toBe(28);
   });
 });
 

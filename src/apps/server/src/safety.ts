@@ -1,10 +1,13 @@
 // Real-run safety: cost estimate and hard limits for --live.
-export const CREDITS_PER_TAKE = 11; // measured on Cloud (spike-cloud, 121 frames, 8-step distilled)
-export const CREDITS_PER_DA3 = 1; // da3_base on a 31-frame clip: under 1 visible credit, rounded up
+// Measured Oct 22: 4 takes + 4 DA3 on a warm worker cost 19-21 credits (about 0.25 credits per GPU-second);
+// a single cold-start take plus DA3 cost 12. Estimate = warm cost per take + one cold-start margin.
+export const CREDITS_PER_TAKE = 4;
+export const CREDITS_PER_DA3 = 1;
+export const COLD_START_CREDITS = 8;
 export const MAX_LIVE_TAKES = 4;
 export const MAX_LIVE_CREDITS = 60;
 
-export const estimateCredits = (n: number) => n * (CREDITS_PER_TAKE + CREDITS_PER_DA3);
+export const estimateCredits = (n: number) => n * (CREDITS_PER_TAKE + CREDITS_PER_DA3) + COLD_START_CREDITS;
 
 /** Returns an error message when a live run must be refused, else null. */
 export function liveRefusal(n: number, apiKey: string | undefined): string | null {
