@@ -36,10 +36,10 @@ export const realTools: Tools = {
     });
   },
   async score(shotPath, posesPath, candidateId) {
-    // FOV is reported but not gated (calibration freeze), hence --no-fov-gate.
+    // FOV is reported but not gated by default (calibration freeze).
     const { stdout } = await exec(
       "uv",
-      ["run", "python", "-m", "verifier", "score", "--shot", shotPath, "--poses", posesPath, "--candidate-id", candidateId, "--no-fov-gate"],
+      ["run", "python", "-m", "verifier", "score", "--shot", shotPath, "--poses", posesPath, "--candidate-id", candidateId],
       { cwd: SRC_DIR, maxBuffer: 16 * 1024 * 1024 },
     );
     return ScoreReport.parse(JSON.parse(stdout));
