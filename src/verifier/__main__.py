@@ -7,7 +7,8 @@ from pathlib import Path
 
 from comfy_osh_contracts import Shot
 
-from .score import drivers, score
+from .moveclass import classify, focal_ratio
+from .score import TRANS_GATE_RATIO_TOL, drivers, score
 
 
 def main(argv=None):
@@ -17,29 +18,42 @@ def main(argv=None):
     sc.add_argument("--shot", required=True)
     sc.add_argument("--poses", required=True)
     sc.add_argument("--candidate-id")
-    sc.add_argument("--no-fov-gate", action="store_true", help="report FOV error but keep it out of pass/composite")
+    sc.add_argument("--fov-gate", action="store_true", help="gate pass/composite on absolute FOV error (off by default)")
     fl = sub.add_parser("floor", help="score recovered poses for every golden clip (noise floor)")
     fl.add_argument("--clips-dir", required=True)
     fl.add_argument("--poses-dir", required=True)
-    fl.add_argument("--no-fov-gate", action="store_true")
+    fl.add_argument("--fov-gate", action="store_true")
+    cl = sub.add_parser("classify", help="advisory move class (focal ratio) of authored vs recovered")
+    cl.add_argument("--shot", required=True)
+    cl.add_argument("--poses", required=True)
     a = ap.parse_args(argv)
     if a.cmd == "floor":
         from .floor import floor, table
 
-        rows = floor(a.clips_dir, a.poses_dir, fov_gate=not a.no_fov_gate)
+        rows = floor(a.clips_dir, a.poses_dir, fov_gate=a.fov_gate)
         print(table(rows))
         print()
         print(json.dumps(rows, indent=2))
         return 0
     shot = Shot.model_validate_json(Path(a.shot).read_text())
+    if a.cmd == "classify":
+        ra = focal_ratio(shot)
+        try:
+            rr = focal_ratio(json.loads(Path(a.poses).read_text()))
+        except (OSError, ValueError, KeyError, IndexError):
+            rr = None  # failed solve: no recovered class
+        ca, cr = classify(ra), None if rr is None else classify(rr)
+        print(json.dumps({"authored": ca, "recovered": cr, "authoredRatio": ra, "recoveredRatio": rr,
+                          "match": cr == ca, "advisory": True}, indent=2))
+        return 0
     try:
         poses = json.loads(Path(a.poses).read_text())
     except (OSError, ValueError):
         poses = None  # unreadable poses = failed solve, never dropped
-    gate = not a.no_fov_gate
+    gate = a.fov_gate
     rep = score(shot, poses, a.candidate_id or Path(a.poses).stem, fov_gate=gate)
     print(json.dumps(rep.model_dump(by_alias=True), indent=2))
-    print(drivers(rep, gate), file=sys.stderr)
+    print(drivers(rep, gate, abs(focal_ratio(shot) - 1) <= TRANS_GATE_RATIO_TOL), file=sys.stderr)
     return 0
 
 

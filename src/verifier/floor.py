@@ -11,7 +11,7 @@ from comfy_osh_contracts import Shot
 from .score import score
 
 
-def floor(clips_dir, poses_dir, fov_gate=True):
+def floor(clips_dir, poses_dir, fov_gate=False):
     rows = []
     for meta_path in sorted(Path(clips_dir).glob("*.meta.json")):
         meta = json.loads(meta_path.read_text())

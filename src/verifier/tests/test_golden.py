@@ -97,7 +97,8 @@ CASES = [
 
 def run(name, kind):
     shot = load(name)
-    return score(shot, to_world(*perturb(kind, *sample_shot(shot))), "c")
+    # Synthetic FOV is exact, so these tests switch the (default-off) FOV gate on.
+    return score(shot, to_world(*perturb(kind, *sample_shot(shot))), "c", fov_gate=True)
 
 
 @pytest.mark.parametrize("name", NAMES)
@@ -120,7 +121,9 @@ def test_modes():
 def test_perturbed_strictly_worse(name, kind):
     good, bad = run(name, "exact"), run(name, kind)
     assert bad.composite > good.composite + 0.05, (name, kind, bad.composite)
-    if kind != "half":  # half amplitude of a straight dolly is absorbed by the Sim(3) scale
+    # Known limits: half amplitude of a straight dolly is absorbed by the fitted scale, and zoom-no-dolly on a
+    # dolly_zoom shot is not translation-gated (docs/calibration.md), so neither is required to fail.
+    if kind != "half" and (name, kind) != ("dolly_zoom", "zoom_no_dolly"):
         assert not bad.passed
 
 
@@ -149,8 +152,8 @@ def test_fov_gate_can_be_disabled():
     shot = load("zoom_only")
     pos, quat, fov = sample_shot(shot)
     poses = to_world(pos, quat, np.full_like(fov, 35.0))  # DA3-style wrong FOV
-    assert not score(shot, poses, "c").passed
-    r = score(shot, poses, "c", fov_gate=False)
+    assert not score(shot, poses, "c", fov_gate=True).passed
+    r = score(shot, poses, "c")  # default: FOV reported, not gated
     assert r.passed and r.fovErrDeg > 2
 
 
@@ -271,6 +274,115 @@ def test_floor(tmp_path, capsys):
     assert not rows[0]["solveOk"]
     assert all(r["solveOk"] and r["pass"] and r["composite"] < 1e-2 for r in rows[1:])
     assert META[0].name[:-10] in out.split("\n\n")[0]
+
+
+# ---- Real DA3 Base takes (docs/calibration.md) ----
+import copy
+import math
+
+from verifier.moveclass import classify, focal_ratio
+from verifier.score import GATES
+
+G = SRC / "tests/golden"
+BASE, SC2 = G / "da3_poses_real_base", G / "parallax_scene2"
+
+
+def _clip_shot(name):
+    return json.loads((CLIPS / f"{name}.meta.json").read_text())["shot"]
+
+
+def real_shots():
+    d, dz = _clip_shot("dolly_5to3"), _clip_shot("dolly_zoom_5to3")
+    z = copy.deepcopy(d)
+    z["id"] = "fx_zoom_5to3"
+    p0 = z["track"][0]
+    z["track"][1]["position"], z["track"][1]["quaternion"] = p0["position"], p0["quaternion"]
+    z["track"][1]["fov_v_deg"] = 2 * math.degrees(math.atan(math.tan(math.radians(p0["fov_v_deg"] / 2)) / (5 / 3)))
+    return {k: _shot(v) for k, v in {"dolly": d, "dollyzoom": dz, "zoom": z}.items()}
+
+
+FILES = {"dolly": "dolly_5to3", "dollyzoom": "dolly_zoom_5to3", "zoom": "zoom_5to3"}
+POSITIVES = [
+    (mv, tag, path)
+    for mv, fn in FILES.items()
+    for tag, path in [
+        ("s42", BASE / f"{fn}.poses.json"), ("s43", BASE / f"{fn}.s43.poses.json"), ("s44", BASE / f"{fn}.s44.poses.json"),
+        ("sc2s42", SC2 / f"{fn}.scene2.s42.poses.json"), ("sc2s43", SC2 / f"{fn}.scene2.s43.poses.json"),
+    ]
+]
+ids = lambda v: v if isinstance(v, str) else None  # noqa: E731
+
+
+def _real(shotkey, path):
+    shot = real_shots()[shotkey]
+    poses = json.loads(Path(path).read_text())
+    return shot, poses, score(shot, poses, Path(path).name)
+
+
+def test_gates_frozen():
+    assert GATES["rot"] == 2.75 and GATES["trans"] == 12.0
+
+
+@pytest.mark.parametrize("mv,tag,path", POSITIVES, ids=lambda v: v if isinstance(v, str) else "")
+def test_real_positives_pass(mv, tag, path):
+    assert len(POSITIVES) == 15
+    _, _, r = _real(mv, path)
+    assert r.solveOk and r.passed, (mv, tag, r.rotErrDeg, r.transErrPct)
+
+
+@pytest.mark.parametrize("name", ["neg_reversed.s42", "neg_noguide.s42", "neg_noguide.s43"])
+def test_real_negatives_fail(name):
+    assert not _real("dolly", BASE / f"{name}.poses.json")[2].passed
+
+
+@pytest.mark.parametrize("mv,tag,path", [p for p in POSITIVES if p[0] == "zoom"], ids=lambda v: v if isinstance(v, str) else "")
+def test_zoom_take_vs_dolly_shot_fails(mv, tag, path):
+    assert not _real("dolly", path)[2].passed
+
+
+@pytest.mark.xfail(reason="known limitation: a straight dolly of the wrong amplitude; scale is fitted so translation cannot see it", strict=True)
+def test_neg_halfamp_fails():
+    assert not _real("dolly", BASE / "neg_halfamp.s42.poses.json")[2].passed
+
+
+@pytest.mark.parametrize("mv,tag,path", POSITIVES, ids=lambda v: v if isinstance(v, str) else "")
+def test_classify_positive_matches_own_class(mv, tag, path):
+    shot, poses, _ = _real(mv, path)
+    assert classify(focal_ratio(shot)) == classify(focal_ratio(poses))
+
+
+@pytest.mark.parametrize("mv,tag,path", POSITIVES, ids=lambda v: v if isinstance(v, str) else "")
+def test_classify_wrong_move_mismatches(mv, tag, path):
+    if mv == "zoom":
+        shot, poses, _ = _real("dolly", path)
+    elif mv == "dolly":
+        shot, poses, _ = _real("zoom", path)
+    else:
+        pytest.skip("dolly zoom is not part of the dolly/zoom pairing")
+    assert classify(focal_ratio(shot)) != classify(focal_ratio(poses))
+
+
+def test_classify_thresholds():
+    assert classify(1.0) == classify(0.956) == classify(1.046) == "none"
+    assert classify(1.047) == "in" and classify(0.955) == "out"
+
+
+def test_trans_gate_only_for_non_zoom_shots():
+    # same recovered poses: translation fails the gate on a dolly shot, is reported-only on a zoom shot
+    p = BASE / "dolly_zoom_5to3.s44.poses.json"  # trans ~15% > 12
+    assert not _real("dolly", p)[2].passed
+    r = _real("dollyzoom", p)[2]
+    assert r.transErrPct > GATES["trans"] and r.passed
+
+
+def test_classify_cli(tmp_path, capsys):
+    from verifier.__main__ import main
+
+    shot = tmp_path / "s.json"
+    shot.write_text(json.dumps(_clip_shot("dolly_5to3")))
+    assert main(["classify", "--shot", str(shot), "--poses", str(BASE / "zoom_5to3.poses.json")]) == 0
+    out = json.loads(capsys.readouterr().out)
+    assert out["authored"] == "none" and out["recovered"] == "in" and out["match"] is False
 
 
 def test_reversed_straight_dolly_fails():
