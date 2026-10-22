@@ -23,6 +23,9 @@ importers:
       '@comfy-osh/contracts':
         specifier: workspace:*
         version: link:../../packages/contracts
+      '@comfy-osh/rig-core':
+        specifier: workspace:*
+        version: link:../../packages/rig-core
 
   apps/studio:
     dependencies:
