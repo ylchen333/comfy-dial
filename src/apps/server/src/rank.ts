@@ -15,14 +15,21 @@ export function authoredFocalRatio(shot: Pick<Shot, "track">): number {
 }
 
 export type MoveClass = "none" | "in" | "out";
-/** Advisory band from docs/calibration.md: 'none' if 0.956 <= r <= 1.046, 'in' above (FOV narrows), 'out' below. */
-export const classOfRatio = (r: number): MoveClass => (r > 1.046 ? "in" : r < 0.956 ? "out" : "none");
+const NONE_TOL = 0.1; // |ln r| within this is 'no zoom' (mirrors src/verifier/moveclass.py)
+const REL_TOL = 0.6; // zoom shots: recovered log-ratio may be this fraction off the authored one
+export const classOfRatio = (r: number): MoveClass => (Math.abs(Math.log(r)) <= NONE_TOL ? "none" : r > 1 ? "in" : "out");
+export function movesMatch(rAuth: number, rRec: number): boolean {
+  const la = Math.log(rAuth);
+  const lr = Math.log(rRec);
+  if (Math.abs(la) <= NONE_TOL) return Math.abs(lr) <= NONE_TOL;
+  return la * lr > 0 && Math.abs(lr - la) <= REL_TOL * Math.abs(la);
+}
 export interface MoveCheck { authored: MoveClass; recovered: MoveClass; match: boolean }
 export function moveCheck(shot: Pick<Shot, "track">, poses: { solve_ok: boolean; frames: { fov_v_deg: number }[] }): MoveCheck | undefined {
   if (!poses.solve_ok || poses.frames.length < 2) return undefined;
-  const authored = classOfRatio(authoredFocalRatio(shot));
-  const recovered = classOfRatio(cotHalf(poses.frames[poses.frames.length - 1]!.fov_v_deg) / cotHalf(poses.frames[0]!.fov_v_deg));
-  return { authored, recovered, match: authored === recovered };
+  const rAuth = authoredFocalRatio(shot);
+  const rRec = cotHalf(poses.frames[poses.frames.length - 1]!.fov_v_deg) / cotHalf(poses.frames[0]!.fov_v_deg);
+  return { authored: classOfRatio(rAuth), recovered: classOfRatio(rRec), match: movesMatch(rAuth, rRec) };
 }
 
 export const transGated = (shot: Pick<Shot, "track">) =>

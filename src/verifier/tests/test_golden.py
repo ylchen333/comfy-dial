@@ -280,7 +280,7 @@ def test_floor(tmp_path, capsys):
 import copy
 import math
 
-from verifier.moveclass import classify, focal_ratio
+from verifier.moveclass import classify, focal_ratio, moves_match
 from verifier.score import GATES
 
 G = SRC / "tests/golden"
@@ -345,26 +345,74 @@ def test_neg_halfamp_fails():
     assert not _real("dolly", BASE / "neg_halfamp.s42.poses.json")[2].passed
 
 
+# dollyzoom s42 recovers a focal ratio of 0.94 against an authored 0.60: DA3 barely tracked that zoom.
+KNOWN_UNMATCHED = {("dollyzoom", "s42")}
+
+
 @pytest.mark.parametrize("mv,tag,path", POSITIVES, ids=lambda v: v if isinstance(v, str) else "")
-def test_classify_positive_matches_own_class(mv, tag, path):
+def test_move_match_positive(mv, tag, path):
     shot, poses, _ = _real(mv, path)
-    assert classify(focal_ratio(shot)) == classify(focal_ratio(poses))
+    ok = moves_match(focal_ratio(shot), focal_ratio(poses))
+    assert ok == ((mv, tag) not in KNOWN_UNMATCHED)
 
 
 @pytest.mark.parametrize("mv,tag,path", POSITIVES, ids=lambda v: v if isinstance(v, str) else "")
-def test_classify_wrong_move_mismatches(mv, tag, path):
+def test_move_match_wrong_move_mismatches(mv, tag, path):
     if mv == "zoom":
         shot, poses, _ = _real("dolly", path)
     elif mv == "dolly":
         shot, poses, _ = _real("zoom", path)
     else:
         pytest.skip("dolly zoom is not part of the dolly/zoom pairing")
-    assert classify(focal_ratio(shot)) != classify(focal_ratio(poses))
+    assert not moves_match(focal_ratio(shot), focal_ratio(poses))
+
+
+LOOP = G / "loop_runs"
+
+
+@pytest.mark.parametrize("seed", [1000, 1001, 1002, 1003, 1004])
+def test_push_in_loop_takes_pass_and_match(seed):
+    """Five real push_in takes: all pass the gate; the advisory label must not flag them (0.92-0.98 ratios)."""
+    shot = Shot.model_validate_json(json.dumps(_clip_shot("push_in")))
+    poses = json.loads((LOOP / f"push_in.s{seed}.poses.json").read_text())
+    assert score(shot, poses, f"s{seed}").passed
+    assert moves_match(focal_ratio(shot), focal_ratio(poses))
+
+
+@pytest.mark.parametrize("seed", [2000, 2001])
+def test_push_in_unguided_takes_fail(seed):
+    shot = Shot.model_validate_json(json.dumps(_clip_shot("push_in")))
+    poses = json.loads((LOOP / f"push_in_unguided.s{seed}.poses.json").read_text())
+    assert not score(shot, poses, f"s{seed}").passed
+
+
+def test_dolly_zoom_loop_takes_label():
+    """Both pass the gate (translation ungated); the label separates them: 3001 follows, 3000 does not."""
+    shot = Shot.model_validate_json(json.dumps(_clip_shot("dolly_zoom_5to3")))
+    got = {}
+    for seed in (3000, 3001):
+        poses = json.loads((LOOP / f"dolly_zoom_5to3.s{seed}.poses.json").read_text())
+        assert score(shot, poses, f"s{seed}").passed
+        got[seed] = moves_match(focal_ratio(shot), focal_ratio(poses))
+    assert got == {3000: False, 3001: True}
+
+
+@pytest.mark.parametrize("seed", [4000, 4001])
+def test_orbit_loop_takes_pass(seed):
+    shot = Shot.model_validate_json(json.dumps(_clip_shot("orbit")))
+    poses = json.loads((LOOP / f"orbit.s{seed}.poses.json").read_text())
+    assert score(shot, poses, f"s{seed}").passed
 
 
 def test_classify_thresholds():
-    assert classify(1.0) == classify(0.956) == classify(1.046) == "none"
-    assert classify(1.047) == "in" and classify(0.955) == "out"
+    assert classify(1.0) == classify(0.92) == classify(1.10) == "none"
+    assert classify(1.12) == "in" and classify(0.90) == "out"
+
+
+def test_moves_match_rules():
+    assert moves_match(1.0, 0.924) and not moves_match(1.0, 0.85)  # authored none: |ln r| <= 0.10
+    assert moves_match(0.6, 0.706) and not moves_match(0.6, 1.008) and not moves_match(0.6, 0.94)
+    assert not moves_match(1.667, 1.0) and moves_match(1.667, 1.27)  # same direction, within 60% of authored
 
 
 def test_trans_gate_only_for_non_zoom_shots():

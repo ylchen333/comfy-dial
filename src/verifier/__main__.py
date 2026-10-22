@@ -7,7 +7,7 @@ from pathlib import Path
 
 from comfy_osh_contracts import Shot
 
-from .moveclass import classify, focal_ratio
+from .moveclass import classify, focal_ratio, moves_match
 from .score import TRANS_GATE_RATIO_TOL, drivers, score
 
 
@@ -47,7 +47,7 @@ def main(argv=None):
             rr = None  # failed solve: no recovered class
         ca, cr = classify(ra), None if rr is None else classify(rr)
         print(json.dumps({"authored": ca, "recovered": cr, "authoredRatio": ra, "recoveredRatio": rr,
-                          "match": cr == ca, "advisory": True}, indent=2))
+                          "match": rr is not None and moves_match(ra, rr), "advisory": True}, indent=2))
         return 0
     try:
         poses = json.loads(Path(a.poses).read_text())
