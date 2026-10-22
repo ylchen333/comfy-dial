@@ -30,5 +30,6 @@ Result on the labelled set: 15 of 15 positives pass; 8 of 9 failures are caught.
 - 2 scenes, 5 takes per move, one subject type. The thresholds were chosen after seeing this data, so the 15/15 is a fit, not a held-out result.
 - The move-class margin is thin. It is a label, not a gate.
 - A reversed dolly zoom is not covered by the translation gate (ungated for FOV-changing shots). It is covered only if a golden test says so; add one before relying on it.
+- **Zoom-only passes an authored dolly zoom.** With translation ungated on FOV-changing shots and FOV ungated, a take that only zooms (camera still) passes a dolly-zoom shot; a dolly take also passes a zoom shot. Only the advisory `classify` label catches either, and its margin is thin. So a dolly-zoom shot is verified for rotation and move class only. The synthetic `dolly_zoom` / `zoom_no_dolly` case is exempt from the "must fail" assertion for this reason (its composite is still worse than the exact path).
 - `neg_weak` (strength 0.3) was excluded: LTX still followed the full dolly.
 - Re-run `python -m verifier floor` and the table in this file whenever DA3, the model size or the guide changes.

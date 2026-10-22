@@ -174,6 +174,7 @@ Source of truth: JSON Schema in `src/packages/contracts/schema/`. TS (zod) and P
 - Correct path → near-zero error.
 - Perturbed path (reversed, half amplitude, **zoom instead of dolly**, wrong orbit direction) → strictly worse score.
 - A straight dolly with fixed orientation, reversed, **must fail** (added Oct 18).
+- Known limit (Oct 22): on a dolly-zoom shot, translation and absolute FOV are not gated (unreliable even on rendered footage), so a zoom-only take passes; only the advisory move-class label flags it. See `docs/calibration.md`.
 - If the verifier can't separate dolly from zoom on synthetic footage, **stop and fix before M1.**
 
 **Status (Oct 18):** on real LTX takes, DA3 poses separate dolly from zoom from dolly zoom in only 6 of 9 (FOV is biased and under-tracked). A parallax statistic (f_ratio from DA3 depth and subject size) separated 9 of 9 on one scene, but fails on rendered clips and is unvalidated on other scenes. A second-scene check is running before it enters the verifier.
