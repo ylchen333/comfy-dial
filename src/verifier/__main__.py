@@ -35,7 +35,10 @@ def main(argv=None):
         print()
         print(json.dumps(rows, indent=2))
         return 0
-    shot = Shot.model_validate_json(Path(a.shot).read_text())
+    raw = json.loads(Path(a.shot).read_text())
+    if raw.get("format") == "comfy-osh.golden-clip/1":  # golden-clip .meta.json wraps the Shot
+        raw = raw["shot"]
+    shot = Shot.model_validate_json(json.dumps(raw))
     if a.cmd == "classify":
         ra = focal_ratio(shot)
         try:

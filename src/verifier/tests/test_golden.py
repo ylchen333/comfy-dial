@@ -398,3 +398,17 @@ def test_reversed_straight_dolly_fails():
     bad = score(shot, to_world(pos[::-1], quat, fov), "c")
     assert good.passed and good.transErrPct < 1e-3
     assert bad.transErrPct > 40 and not bad.passed  # exactly 50: reversed is uncorrelated, so s = 0
+
+
+def test_cli_accepts_golden_meta_json(capsys):
+    from verifier.__main__ import main
+    import sys
+    root = Path(__file__).resolve().parents[2] / "tests" / "golden"
+    argv = ["verifier", "classify", "--shot", str(root / "clips" / "dolly_5to3.meta.json"),
+            "--poses", str(root / "da3_poses_real_base" / "dolly_5to3.poses.json")]
+    old, sys.argv = sys.argv, argv
+    try:
+        main()
+    finally:
+        sys.argv = old
+    assert '"match": true' in capsys.readouterr().out
