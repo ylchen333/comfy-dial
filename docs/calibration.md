@@ -47,4 +47,16 @@ Limits: n = 2 failures, one shot, one failure mode (guide off, near-static camer
 
 ## Real loop takes kept as regression fixtures
 
-`src/tests/golden/loop_runs/` holds the stored poses: `push_in` seeds 1000–1004 (guided, all pass, label matches), `push_in_unguided` 2000–2001 (fail), `dolly_zoom_5to3` 3000–3001 (both pass the gate; the label matches 3001 and flags 3000, whose recovered ratio is 1.008 and translation error 50%), `orbit` 4000–4001 (pass, rot 1.0–1.5°, trans 1.2–1.5%). `verifier/tests/test_golden.py` asserts each.
+`src/tests/golden/loop_runs/` holds the stored poses: `push_in` seeds 1000–1004 (guided, all pass, label matches), `push_in_unguided` 2000–2001 (fail), `dolly_zoom_5to3` 3000–3004 (all five pass the gate; the label matches 3001 and 3002 only), `orbit` 4000–4004 (all pass, rot 1.0–1.7°, trans 0.75–1.5%). `verifier/tests/test_golden.py` asserts each.
+
+## Five takes per shot (Oct 24, live, DA3 Base)
+
+| Shot | Takes | Pass | Rot ° | Trans % | Move label |
+|---|---|---|---|---|---|
+| `push_in` | 1000–1004 | 5 of 5 | 0.68–1.04 | 2.1–3.4 | 5 of 5 match |
+| `orbit` | 4000–4004 | 5 of 5 | 0.99–1.68 | 0.75–1.51 | 5 of 5 match (authored no zoom) |
+| `dolly_zoom_5to3` | 3000–3004 | 5 of 5 | 0.70–1.80 | 10.9–50 (ungated) | 2 of 5 match |
+
+Dolly zoom, recovered focal ratio against authored 0.60: 3001 = 0.71, 3002 = 0.60, 3004 = 0.88 (under-zoomed, flagged), 3000 = 1.008 and 3003 = 1.002 (no zoom recovered, flagged). Seed 3002 also has a drifted segment (index 2). Translation errors of 11–50% are ungated on this shot, so "5 of 5 pass" means rotation held; it does not verify the dolly zoom. The label is weak here, and no rule change was made after this run.
+
+Cost: 27 credits for 3 new dolly-zoom takes (estimate 33), 23 for 3 new orbit takes. The resumed seeds reused their stored job ids.

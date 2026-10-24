@@ -387,17 +387,17 @@ def test_push_in_unguided_takes_fail(seed):
 
 
 def test_dolly_zoom_loop_takes_label():
-    """Both pass the gate (translation ungated); the label separates them: 3001 follows, 3000 does not."""
+    """All five pass the gate (translation ungated); the label matches 3 of 5. 3000/3003 recovered no zoom (ratio ~1.0), 3004 under-zoomed (0.88)."""
     shot = Shot.model_validate_json(json.dumps(_clip_shot("dolly_zoom_5to3")))
     got = {}
-    for seed in (3000, 3001):
+    for seed in (3000, 3001, 3002, 3003, 3004):
         poses = json.loads((LOOP / f"dolly_zoom_5to3.s{seed}.poses.json").read_text())
         assert score(shot, poses, f"s{seed}").passed
         got[seed] = moves_match(focal_ratio(shot), focal_ratio(poses))
-    assert got == {3000: False, 3001: True}
+    assert got == {3000: False, 3001: True, 3002: True, 3003: False, 3004: False}
 
 
-@pytest.mark.parametrize("seed", [4000, 4001])
+@pytest.mark.parametrize("seed", [4000, 4001, 4002, 4003, 4004])
 def test_orbit_loop_takes_pass(seed):
     shot = Shot.model_validate_json(json.dumps(_clip_shot("orbit")))
     poses = json.loads((LOOP / f"orbit.s{seed}.poses.json").read_text())
