@@ -9,6 +9,7 @@ export const SENSOR_PRESETS = [
 
 /** Resolutions are multiples of 32 as the Shot contract requires. */
 export const ASPECT_PRESETS = [
+  { id: "3:2", label: "3:2 (live-validated)", width: 768, height: 512 },
   { id: "21:9", label: "21:9", width: 1120, height: 480 },
   { id: "16:9", label: "16:9", width: 1024, height: 576 },
   { id: "9:16", label: "9:16", width: 576, height: 1024 },

@@ -1,14 +1,17 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
-import { FPS, sampleShot, type Vec3 } from "@comfy-osh/rig-core";
+import type { Poses } from "@comfy-osh/contracts";
+import { FPS, sampleShot } from "@comfy-osh/rig-core";
 import { exportShot } from "../logic/compile.ts";
 import { canRedo, canUndo, commit, createHistory, redo, undo, type History } from "../logic/history.ts";
-import { exportShotJson, importShotJson, parsePosesJson, validateDoc } from "../logic/io.ts";
+import { alignRecovered } from "../logic/align.ts";
+import { exportShotJson, importShotJson, parsePosesDoc, validateDoc } from "../logic/io.ts";
 import {
   addKeyAtCurrent, deleteKey, evalChannel, moveKey, newDoc, setEasing, setFrames, setResolution, setSensorHeight, upsertKey,
 } from "../logic/keys.ts";
 import { ASPECT_PRESETS, SENSOR_PRESETS, aspectIdOf, focalToFov } from "../logic/lens.ts";
 import { PRESET_IDS, PRESET_LABELS, applyPreset } from "../logic/presets.ts";
 import type { Channel, Easing, Result, StudioDoc } from "../logic/types.ts";
+import { RunPanel } from "./RunPanel.tsx";
 import { Timeline, type SelectedKey } from "./Timeline.tsx";
 import { Viewport, type GizmoTarget } from "./Viewport.tsx";
 
@@ -38,10 +41,12 @@ export function App() {
   const [gizmo, setGizmo] = useState<GizmoTarget>("position");
   const [showPip, setShowPip] = useState(true);
   const [messages, setMessages] = useState<string[]>([]);
-  const [recovered, setRecovered] = useState<Vec3[] | null>(null);
+  const [recoveredDoc, setRecoveredDoc] = useState<Poses | null>(null);
+  const [recoveredSeed, setRecoveredSeed] = useState<number | null>(null);
 
   const poses = useMemo(() => sampleShot(exportShot(doc)), [doc]);
   const validation = useMemo(() => validateDoc(doc), [doc]);
+  const recovered = useMemo(() => (recoveredDoc ? alignRecovered(recoveredDoc, poses)?.path ?? null : null), [recoveredDoc, poses]);
   const pose = poses[Math.min(frame, poses.length - 1)]!;
   const focal = evalChannel(doc, "focal", frame);
 
@@ -125,11 +130,19 @@ export function App() {
     });
   const doLoadPoses = () =>
     readFile("application/json,.json", (text) => {
-      const r = parsePosesJson(text);
+      const r = parsePosesDoc(text);
       if (!r.ok) return setMessages(r.errors);
-      setRecovered(r.value);
+      setRecoveredDoc(r.value);
+      setRecoveredSeed(null);
       setMessages([]);
     });
+  const showTake = (text: string, seed: number) => {
+    const r = parsePosesDoc(text);
+    if (!r.ok) return setMessages(r.errors);
+    setRecoveredDoc(r.value);
+    setRecoveredSeed(seed);
+    setMessages([]);
+  };
 
   const aspectId = aspectIdOf(doc.resolution);
   const sensorId = SENSOR_PRESETS.find((s) => s.heightMm === doc.sensorHeightMm)?.id ?? "custom";
@@ -143,7 +156,7 @@ export function App() {
         <button onClick={doImport}>Import Shot</button>
         <button onClick={doExport}>Export Shot</button>
         <button onClick={doLoadPoses}>Load Poses (recovered)</button>
-        {recovered && <button onClick={() => setRecovered(null)}>Clear recovered</button>}
+        {recoveredDoc && <button onClick={() => { setRecoveredDoc(null); setRecoveredSeed(null); }}>Clear recovered</button>}
         <span className={validation.ok ? "valid" : "invalid"}>{validation.ok ? "Shot valid" : "Shot invalid"}</span>
         <span className="legend"><i style={{ background: "#ffd23f" }} />authored <i style={{ background: "#3fd2ff" }} />recovered</span>
       </header>
@@ -230,6 +243,13 @@ export function App() {
             </div>
             <p className="hint">Replaces all keys with editable ones, framed on the subject.</p>
           </section>
+          <RunPanel
+            shot={validation.ok ? validation.value : null}
+            resolution={doc.resolution}
+            selectedSeed={recoveredSeed}
+            onShowTake={showTake}
+            onClearTake={() => { setRecoveredDoc(null); setRecoveredSeed(null); }}
+          />
         </aside>
       </main>
       <Timeline

@@ -7,3 +7,5 @@ export * from "./safety.ts";
 export { MockClient } from "./mock-client.ts";
 export { CliComfyClient } from "./cli-client.ts";
 export { realTools, type Tools } from "./tools.ts";
+export * from "./guide.ts";
+export * from "./api.ts";

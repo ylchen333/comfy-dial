@@ -33,3 +33,13 @@ aside input[type="range"], aside select, aside input[type="number"] { width: 100
 .key { position: absolute; top: 7px; width: 12px; height: 12px; margin-left: -6px; background: #ffd23f; transform: rotate(45deg); cursor: grab; touch-action: none; }
 .key.sel { background: #fff; outline: 2px solid #ff5a7a; }
 .playhead { position: absolute; top: 0; bottom: 0; width: 2px; margin-left: -1px; background: #ff5a7a; pointer-events: none; }
+
+.runpanel .takes { width: 100%; border-collapse: collapse; font-size: 11px; }
+.runpanel .takes th, .runpanel .takes td { padding: 2px 4px; text-align: left; white-space: nowrap; }
+.runpanel .takes tbody tr { cursor: pointer; }
+.runpanel .takes tbody tr:hover, .runpanel .takes tr.sel { background: rgba(63, 210, 255, 0.15); }
+.runpanel .badge { padding: 1px 5px; border-radius: 3px; font-weight: 600; }
+.runpanel .badge.ok { background: #1f6f43; color: #fff; }
+.runpanel .badge.bad { background: #8a2b2b; color: #fff; }
+.runpanel .warn { color: #ffb347; }
+.runpanel .err { color: #ff7b7b; }

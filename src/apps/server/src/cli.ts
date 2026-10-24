@@ -1,6 +1,6 @@
 // pnpm loop --shot <shot.json> --n <k> [--live] [--prompt ...] [--guide depth.mp4]
 // Default is a dry run against the mock client (free, synthetic poses). --live spends real Cloud credits.
-import { existsSync, readFileSync, readdirSync, rmSync } from "node:fs";
+import { existsSync, readFileSync, rmSync } from "node:fs";
 import { dirname, isAbsolute, join, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 import { parseArgs } from "node:util";
@@ -8,6 +8,7 @@ import { ControlPacket, Shot } from "@comfy-osh/contracts";
 import { CliComfyClient } from "./cli-client.ts";
 import type { ComfyClient } from "./client.ts";
 import { loadEnvFile } from "./env.ts";
+import { ensureGuide } from "./guide.ts";
 import { MockClient } from "./mock-client.ts";
 import { runLoop } from "./pipeline.ts";
 import { formatTable } from "./rank.ts";
@@ -24,23 +25,6 @@ const die = (msg: string): never => {
   console.error(msg);
   process.exit(1);
 };
-
-interface ClipMeta {
-  shotId: string;
-  files: { depth: string };
-  depth: { near: number; far: number };
-}
-
-/** The M1 guide is an existing golden depth clip whose meta names this shot. No renderer here. */
-function findGuide(shotId: string): { path: string; near: number; far: number } | null {
-  const dir = resolve(SRC_DIR, "tests/golden/clips");
-  if (!existsSync(dir)) return null;
-  for (const f of readdirSync(dir).filter((x) => x.endsWith(".meta.json")).sort()) {
-    const m = JSON.parse(readFileSync(join(dir, f), "utf8")) as ClipMeta;
-    if (m.shotId === shotId) return { path: join(dir, m.files.depth), near: m.depth.near, far: m.depth.far };
-  }
-  return null;
-}
 
 async function main() {
   const { values: a } = parseArgs({
@@ -67,8 +51,9 @@ async function main() {
   const raw = JSON.parse(readFileSync(shotPath, "utf8")) as { shot?: unknown };
   const shot = Shot.parse(raw.shot ?? raw); // also accepts a golden clip meta (it embeds the Shot)
 
-  const guide = a.guide ? { path: resolve(CWD, a.guide), near: 1, far: 100 } : findGuide(shot.id);
-  if (!guide) die(`no depth guide for ${shot.id}: pass --guide <depth.mp4> or run pnpm --filter @comfy-osh/rig-core render:golden`);
+  const guide = a.guide
+    ? { path: resolve(CWD, a.guide), near: 1, far: 100 }
+    : await ensureGuide(shot, resolve(here, "..", ".runs", "guides")).catch((e) => die(`no depth guide for ${shot.id} and rendering one failed: ${(e as Error).message}`));
   if (!existsSync(guide!.path)) die(`guide missing: ${guide!.path}\nrun: pnpm --filter @comfy-osh/rig-core render:golden (needs ffmpeg)`);
   if (Number(a.strength) === 0 && !a["allow-unguided"]) die("--strength 0 gives an unguided take (negative control); add --allow-unguided to confirm");
   const packet = ControlPacket.parse({

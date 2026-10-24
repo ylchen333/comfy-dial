@@ -50,3 +50,17 @@ export function parsePosesJson(text: string): Validated<Vec3[]> {
 }
 
 
+
+/** Recovered poses as a validated document (the studio aligns them to the authored path before drawing). */
+export function parsePosesDoc(text: string): Validated<Poses> {
+  let raw: unknown;
+  try {
+    raw = JSON.parse(text);
+  } catch (e) {
+    return { ok: false, errors: [`not valid JSON: ${(e as Error).message}`] };
+  }
+  const r = Poses.safeParse(raw);
+  if (!r.success) return { ok: false, errors: formatIssues(r.error.issues) };
+  if (!r.data.solve_ok) return { ok: false, errors: ["solve_ok is false: no recovered path to draw"] };
+  return { ok: true, value: r.data };
+}

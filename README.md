@@ -30,6 +30,15 @@ pnpm install && uv sync
 pnpm -r test && uv run pytest verifier
 ```
 
+Studio (author a move, generate takes, see the ranked table and recovered path), two terminals from `src/`:
+
+```bash
+pnpm serve                              # API on 127.0.0.1:5198; renders the depth guide with ffmpeg
+pnpm --filter @comfy-osh/studio dev     # http://localhost:5199
+```
+
+"Run dry" uses synthetic poses and costs nothing. "Run live" needs `COMFY_API_KEY`, the 3:2 (768x512) aspect, and a credit confirmation; it is capped at 5 takes. CLI: `pnpm loop --shot <shot.json> --n 4 [--live]`.
+
 ## TODO
 
 Status as of Oct 16, 2026. `[x]` = done and tested.
@@ -68,17 +77,17 @@ Status as of Oct 16, 2026. `[x]` = done and tested.
 - [ ] server: persist jobs so a crash or retry never double-submits.
 - [ ] server: chain takes → DA3 job → poses → verifier → `ScoreReport`.
 - [ ] rig-renderer: encode the depth pass as an mp4 ready for upload.
-- [ ] main: wire `pnpm loop --shot <fixture> --n 4` to print a ranked table of real takes.
+- [x] main: wire `pnpm loop --shot <fixture> --n 4` to print a ranked table of real takes.
 - [ ] verifier: calibrate the pass thresholds on 10 real takes, then freeze them.
 
 ### M2 · Studio
 - [ ] studio: import glTF/GLB scenes and ship two bundled CC0 scenes.
-- [ ] studio: key camera position, look-at and focal length on a timeline.
-- [ ] studio: apply the five move presets as editable keyframes.
+- [x] studio: key camera position, look-at and focal length on a timeline.
+- [x] studio: apply the five move presets as editable keyframes.
 - [ ] studio: show a contact sheet of takes with scores and pass/fail badges.
-- [ ] studio: overlay the authored path against each recovered path in 3D.
-- [ ] studio: add a guidance-strength (`attention_strength`) slider.
-- [ ] server: expose REST endpoints and job events for the studio.
+- [x] studio: overlay the authored path against each recovered path in 3D (recovered path scaled and anchored to the authored frame-0 camera).
+- [x] studio: add a guidance-strength (`attention_strength`) slider.
+- [x] server: expose REST endpoints and job events for the studio.
 - [ ] testing: cover author → generate → ranked takes with a Playwright E2E test.
 
 ### M3 · Repair and the hard shot

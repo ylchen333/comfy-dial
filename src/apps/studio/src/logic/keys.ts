@@ -32,7 +32,7 @@ export function newDoc(id = "shot_studio"): StudioDoc {
   return {
     id,
     frames,
-    resolution: { width: 1024, height: 576 },
+    resolution: { width: 768, height: 512 },
     sensorHeightMm: 24,
     scene: DEFAULT_SCENE_NODES,
     segments: thirds(frames),
