@@ -71,3 +71,24 @@ describe("runBlocker", () => {
     expect(runBlocker({ ...base, live: false, confirmed: false, resolution: { width: 1120, height: 480 } })).toBeNull();
   });
 });
+
+describe("alignRecovered orientation", () => {
+  it("reports ~0 rotation error for an exact copy and the injected yaw for a drifted one", () => {
+    const a = authored("push-in");
+    const exact = alignRecovered(asDa3(a, 0.5, 33, [1, 2, 3]), a)!;
+    expect(Math.max(...exact.poses.map((p) => p.rotErrDeg))).toBeLessThan(1e-3);
+    const base = asDa3(a, 0.5, 33, [1, 2, 3]);
+    const yaw = (deg: number): Quat => [0, Math.sin((deg * Math.PI) / 360), 0, Math.cos((deg * Math.PI) / 360)];
+    const mul = (x: Quat, y: Quat): Quat => [
+      x[3] * y[0] + x[0] * y[3] + x[1] * y[2] - x[2] * y[1], x[3] * y[1] - x[0] * y[2] + x[1] * y[3] + x[2] * y[0],
+      x[3] * y[2] + x[0] * y[1] - x[1] * y[0] + x[2] * y[3], x[3] * y[3] - x[0] * y[0] - x[1] * y[1] - x[2] * y[2],
+    ];
+    const drift = { ...base, frames: base.frames.map((f, i) => (i === base.frames.length - 1 ? { ...f, quaternion: mul(f.quaternion, yaw(20)) } : f)) };
+    const r = alignRecovered(drift, a)!;
+    expect(r.poses[r.poses.length - 1]!.rotErrDeg).toBeGreaterThan(19.9);
+    expect(r.poses[r.poses.length - 1]!.rotErrDeg).toBeLessThan(20.1);
+    expect(r.poses[0]!.rotErrDeg).toBeLessThan(1e-3);
+    // The path barely moves: the drift is invisible to a position-only overlay.
+    expect(r.path.length).toBe(exact.path.length);
+  });
+});

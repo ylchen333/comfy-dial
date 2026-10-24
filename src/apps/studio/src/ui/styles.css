@@ -43,3 +43,6 @@ aside input[type="range"], aside select, aside input[type="number"] { width: 100
 .runpanel .badge.bad { background: #8a2b2b; color: #fff; }
 .runpanel .warn { color: #ffb347; }
 .runpanel .err { color: #ff7b7b; }
+
+.viewport { position: relative; }
+.rot-readout { position: absolute; left: 12px; bottom: 12px; padding: 4px 8px; border-radius: 4px; background: rgba(15, 18, 24, 0.85); color: #3fd2ff; font: 12px ui-monospace, monospace; }

@@ -3,6 +3,7 @@ import { Grid, Line, OrbitControls, TransformControls } from "@react-three/drei"
 import { useEffect, useMemo, useRef, useState } from "react";
 import * as THREE from "three";
 import type { Pose, Vec3 } from "@comfy-osh/rig-core";
+import type { Aligned } from "../logic/align.ts";
 import { evalChannel } from "../logic/keys.ts";
 import type { StudioDoc } from "../logic/types.ts";
 
@@ -12,7 +13,7 @@ interface Props {
   doc: StudioDoc;
   frame: number;
   poses: Pose[];
-  recovered: Vec3[] | null;
+  recovered: Aligned | null;
   gizmo: GizmoTarget;
   showPip: boolean;
   onGizmoCommit: (target: GizmoTarget, value: Vec3) => void;
@@ -53,7 +54,7 @@ function SceneObjects({ doc }: { doc: StudioDoc }) {
 }
 
 /** Wireframe pyramid + far rectangle in camera space (looks down -Z). */
-function FrustumGizmo({ pose, aspect }: { pose: Pose; aspect: number }) {
+function FrustumGizmo({ pose, aspect, color = "#ffd23f" }: { pose: Pose; aspect: number; color?: string }) {
   const geom = useMemo(() => {
     const hh = FRUSTUM_DEPTH * Math.tan((pose.fov_v_deg * Math.PI) / 360);
     const hw = hh * aspect;
@@ -73,7 +74,7 @@ function FrustumGizmo({ pose, aspect }: { pose: Pose; aspect: number }) {
   return (
     <group position={pose.position} quaternion={pose.quaternion}>
       <lineSegments geometry={geom}>
-        <lineBasicMaterial color="#ffd23f" />
+        <lineBasicMaterial color={color} />
       </lineSegments>
     </group>
   );
@@ -158,6 +159,14 @@ export function Viewport({ doc, frame, poses, recovered, gizmo, showPip, onGizmo
   const pose = poses[Math.min(frame, poses.length - 1)]!;
   const aspect = doc.resolution.width / doc.resolution.height;
   const pathPoints = useMemo(() => poses.map((p) => p.position), [poses]);
+  // Recovered camera nearest the current frame, drawn as a cyan ghost frustum with a ray along its view direction
+  // (same length as the authored camera-to-aim distance), so a rotation drift is visible even when the path matches.
+  const nearest = useMemo(() => recovered?.poses.reduce((a, b) => (Math.abs(b.frame - frame) < Math.abs(a.frame - frame) ? b : a)) ?? null, [recovered, frame]);
+  const ghost: Pose | null = nearest ? { frame: nearest.frame, t: 0, position: nearest.position, quaternion: nearest.quaternion, fov_v_deg: nearest.fovDeg } : null;
+  const aimDist = Math.hypot(...(evalChannel(doc, "aim", frame).map((v, i) => v - pose.position[i]!) as Vec3));
+  const ghostAim: Vec3 = ghost
+    ? (new THREE.Vector3(0, 0, -aimDist).applyQuaternion(new THREE.Quaternion(...ghost.quaternion)).add(new THREE.Vector3(...ghost.position)).toArray() as Vec3)
+    : [0, 0, 0];
   return (
     <Canvas camera={{ position: [9, 7, 11], fov: 45, near: 0.1, far: 500 }} gl={{ antialias: true }} style={{ background: "#1b1e24" }}>
       <ambientLight intensity={0.7} />
@@ -173,7 +182,9 @@ export function Viewport({ doc, frame, poses, recovered, gizmo, showPip, onGizmo
             <meshBasicMaterial color="#ffffff" />
           </mesh>
         ))}
-        {recovered && recovered.length > 1 && <Line points={recovered} color="#3fd2ff" lineWidth={2} />}
+        {recovered && recovered.path.length > 1 && <Line points={recovered.path} color="#3fd2ff" lineWidth={2} />}
+        {ghost && <FrustumGizmo pose={ghost} aspect={aspect} color="#3fd2ff" />}
+        {ghost && <Line points={[ghost.position, ghostAim]} color="#3fd2ff" lineWidth={2} />}
         <Gizmos doc={doc} frame={frame} pose={pose} gizmo={gizmo} onGizmoCommit={onGizmoCommit} />
       </group>
       <OrbitControls makeDefault enableDamping={false} target={[0, 1, 0]} />

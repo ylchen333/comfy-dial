@@ -2,7 +2,7 @@
 // verifier) express both paths in the frame-0 camera's axes, fit a single scale s >= 0, then map back through the
 // authored frame-0 camera. Rotation is never fitted, so a reversed or sideways move still looks reversed or sideways.
 import type { Poses } from "@comfy-osh/contracts";
-import { FPS, quatToMat3, type Pose, type Quat, type Vec3 } from "@comfy-osh/rig-core";
+import { FPS, quatAngleDeg, quatToMat3, type Pose, type Quat, type Vec3 } from "@comfy-osh/rig-core";
 
 // R is row-major camera-to-world. toCam = R^T v, toWorld = R v.
 const toCam = (R: number[], v: Vec3): Vec3 => [
@@ -16,7 +16,24 @@ const toWorld = (R: number[], v: Vec3): Vec3 => [
   R[6]! * v[0] + R[7]! * v[1] + R[8]! * v[2],
 ];
 
-export interface Aligned { path: Vec3[]; scale: number }
+const qmul = (a: Quat, b: Quat): Quat => [
+  a[3] * b[0] + a[0] * b[3] + a[1] * b[2] - a[2] * b[1],
+  a[3] * b[1] - a[0] * b[2] + a[1] * b[3] + a[2] * b[0],
+  a[3] * b[2] + a[0] * b[1] - a[1] * b[0] + a[2] * b[3],
+  a[3] * b[3] - a[0] * b[0] - a[1] * b[1] - a[2] * b[2],
+];
+const qconj = (q: Quat): Quat => [-q[0], -q[1], -q[2], q[3]];
+
+/** One recovered camera drawn in the authored world. */
+export interface AlignedPose {
+  frame: number; // authored frame index (round(t * fps))
+  position: Vec3;
+  quaternion: Quat;
+  fovDeg: number;
+  /** Orientation error against the authored camera at that frame, relative to frame 0 (the verifier's rotation metric). */
+  rotErrDeg: number;
+}
+export interface Aligned { path: Vec3[]; scale: number; poses: AlignedPose[] }
 
 /** Null when the solve failed or there is nothing to align. */
 export function alignRecovered(poses: Pick<Poses, "solve_ok" | "frames">, authored: readonly Pose[]): Aligned | null {
@@ -36,9 +53,18 @@ export function alignRecovered(poses: Pick<Poses, "solve_ok" | "frames">, author
     return rel;
   });
   const scale = den > 1e-18 ? Math.max(num / den, 0) : 0;
+  const qa0 = a0.quaternion as Quat;
+  const qr0 = f0.quaternion as Quat;
+  const poseList: AlignedPose[] = poses.frames.map((f) => {
+    const frame = Math.min(authored.length - 1, Math.max(0, Math.round(f.t * FPS)));
+    const rel = qmul(qconj(qr0), f.quaternion as Quat); // recovered rotation relative to frame 0
+    const relA = qmul(qconj(qa0), authored[frame]!.quaternion as Quat);
+    return { frame, position: [0, 0, 0] as Vec3, quaternion: qmul(qa0, rel), fovDeg: f.fov_v_deg, rotErrDeg: quatAngleDeg(rel, relA) };
+  });
   const path = rels.map((r) => {
     const w = toWorld(Ra, [r[0] * scale, r[1] * scale, r[2] * scale]);
     return [a0.position[0] + w[0], a0.position[1] + w[1], a0.position[2] + w[2]] as Vec3;
   });
-  return { path, scale };
+  path.forEach((p, i) => { poseList[i]!.position = p; });
+  return { path, scale, poses: poseList };
 }

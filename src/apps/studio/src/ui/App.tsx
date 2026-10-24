@@ -46,7 +46,8 @@ export function App() {
 
   const poses = useMemo(() => sampleShot(exportShot(doc)), [doc]);
   const validation = useMemo(() => validateDoc(doc), [doc]);
-  const recovered = useMemo(() => (recoveredDoc ? alignRecovered(recoveredDoc, poses)?.path ?? null : null), [recoveredDoc, poses]);
+  const recovered = useMemo(() => (recoveredDoc ? alignRecovered(recoveredDoc, poses) : null), [recoveredDoc, poses]);
+  const rotHere = recovered?.poses.reduce((a, b) => (Math.abs(b.frame - frame) < Math.abs(a.frame - frame) ? b : a)) ?? null;
   const pose = poses[Math.min(frame, poses.length - 1)]!;
   const focal = evalChannel(doc, "focal", frame);
 
@@ -177,6 +178,7 @@ export function App() {
             onGizmoCommit={(target, value) => edit((d) => upsertKey(d, target, frame, value))}
           />
           <div className="pip-label">Shot camera ({doc.resolution.width}x{doc.resolution.height})</div>
+          {rotHere && <div className="rot-readout">recovered camera: {rotHere.rotErrDeg.toFixed(1)}° off the authored aim at frame {rotHere.frame}</div>}
         </div>
         <aside>
           <section>
