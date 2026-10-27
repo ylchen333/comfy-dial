@@ -137,5 +137,6 @@ Put them in `.claude/skills/` so every worktree agent shares them.
 - ponytail's headline numbers (~53% less code, ~41% less time) are the author's benchmarks, not ours. Keep it only if it doesn't fight test-first work in `verifier/`.
 - Spark (World Labs) splat renderer has no skill; write one only if splats come back into scope.
 - ffmpeg/video-analysis community skills are unverified; use plain ffmpeg in scripts instead.
+- Tentative: [peteromallet/VibeComfy](https://github.com/peteromallet/VibeComfy) (MIT, Python workflow authoring layer + CLI). Only the README was read (Oct 26); LTX IC-LoRA support and Cloud behaviour unchecked. Possible use: `doctor` / `nodes ensure` logic for the M3 local preflight. Not in the install block until used.
 
 **Quick Next Move:** Run step 2 of the install block, then ask the comfy-cloud MCP: `search_nodes "LTXAddVideoICLoRAGuide"`.
