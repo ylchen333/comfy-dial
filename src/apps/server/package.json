@@ -9,6 +9,8 @@
     "typecheck": "tsc -p tsconfig.json",
     "test": "tsc -p tsconfig.json && vitest run --passWithNoTests",
     "loop": "node --experimental-strip-types --no-warnings src/cli.ts",
+    "preflight": "node --experimental-strip-types --no-warnings src/preflight-cli.ts",
+    "repair": "node --experimental-strip-types --no-warnings src/repair-cli.ts",
     "serve": "node --experimental-strip-types --no-warnings src/serve.ts"
   },
   "dependencies": {

@@ -98,7 +98,9 @@ export class MockClient implements ComfyClient {
     const kind = Object.values(graph).some((n) => n.class_type === "DepthAnythingV3_MultiView") ? "da3" : "take";
     const file = String((graph[kind === "da3" ? "1" : "9"]?.inputs as { file?: string }).file);
     const seedGraph = graph["16"]?.inputs as { noise_seed?: number } | undefined;
-    const seed = kind === "take" ? Number(seedGraph?.noise_seed) : Number(/_s(\d+)/.exec(file)?.[1] ?? 0);
+    // A repaired clip (name ends -rK) is mocked as a clean follow, so a dry repair shows the whole flow.
+    const repaired = kind === "da3" && /_s\d+-r\d+/.test(file);
+    const seed = kind === "take" ? Number(seedGraph?.noise_seed) : repaired ? 0 : Number(/_s(\d+)/.exec(file)?.[1] ?? 0);
     const job: MockJob = { id: `mock-job-${String(this.jobs.length + 1).padStart(4, "0")}`, key, kind, seed, graph };
     this.jobs.push(job);
     this.byKey.set(key, job);

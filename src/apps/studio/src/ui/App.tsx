@@ -10,7 +10,10 @@ import {
 } from "../logic/keys.ts";
 import { ASPECT_PRESETS, SENSOR_PRESETS, aspectIdOf, focalToFov } from "../logic/lens.ts";
 import { PRESET_IDS, PRESET_LABELS, applyPreset } from "../logic/presets.ts";
+import { getHealth, getPosesText, getRun, getScenes, repairTake, uploadModel, type RunView, type TakeView } from "../logic/runs.ts";
+import { BLOCKING_SCENE_ID, addModel, blockingScene, bundledScene, modelNodes, removeNode, sceneIdOf, withScene, type SceneListing } from "../logic/scenes.ts";
 import type { Channel, Easing, Result, StudioDoc } from "../logic/types.ts";
+import { ContactSheet } from "./ContactSheet.tsx";
 import { RunPanel } from "./RunPanel.tsx";
 import { Timeline, type SelectedKey } from "./Timeline.tsx";
 import { Viewport, type GizmoTarget } from "./Viewport.tsx";
@@ -23,6 +26,17 @@ function download(name: string, text: string) {
   a.click();
   URL.revokeObjectURL(url);
 }
+
+const readBinary = (accept: string, cb: (bytes: ArrayBuffer, name: string) => void) => {
+  const input = document.createElement("input");
+  input.type = "file";
+  input.accept = accept;
+  input.onchange = () => {
+    const file = input.files?.[0];
+    if (file) void file.arrayBuffer().then((b) => cb(b, file.name));
+  };
+  input.click();
+};
 
 const readFile = (accept: string, cb: (text: string) => void) => {
   const input = document.createElement("input");
@@ -43,6 +57,18 @@ export function App() {
   const [messages, setMessages] = useState<string[]>([]);
   const [recoveredDoc, setRecoveredDoc] = useState<Poses | null>(null);
   const [recoveredSeed, setRecoveredSeed] = useState<number | null>(null);
+  const [run, setRun] = useState<RunView | null>(null);
+  const [scenes, setScenes] = useState<SceneListing[]>([]);
+  const [repairCredits, setRepairCredits] = useState(13);
+  useEffect(() => { getHealth().then((h) => setRepairCredits(h.repairCredits)).catch(() => {}); }, []);
+  // A repair runs after the run finished, so RunPanel's poller has stopped: poll here while one is in flight.
+  const repairingId = run?.repairing ? run.id : null;
+  useEffect(() => {
+    if (!repairingId) return;
+    const t = window.setInterval(() => { getRun(repairingId).then((v) => { setRun(v); if (!v.repairing && v.takes.length) { setRecoveredDoc(null); setRecoveredSeed(null); } }).catch(() => {}); }, 1500);
+    return () => window.clearInterval(t);
+  }, [repairingId]);
+  useEffect(() => { getScenes().then(setScenes).catch(() => setScenes([])); }, []);
 
   const poses = useMemo(() => sampleShot(exportShot(doc)), [doc]);
   const validation = useMemo(() => validateDoc(doc), [doc]);
@@ -145,6 +171,31 @@ export function App() {
     setMessages([]);
   };
 
+  const selectTake = (t: TakeView) => {
+    if (!run || !t.hasPoses) return;
+    getPosesText(run.id, t.seed).then((text) => showTake(text, t.seed)).catch((e: Error) => setMessages([e.message]));
+  };
+  const repair = (t: TakeView, segment: number) => {
+    if (!run) return;
+    repairTake(run.id, t.seed, { segment, strength: 1, ...(run.live ? { confirmCredits: repairCredits } : {}) })
+      .then(setRun)
+      .catch((e: Error) => setMessages([e.message]));
+  };
+  const sceneId = sceneIdOf(doc, scenes);
+  const chooseScene = (id: string) => {
+    const listing = scenes.find((l) => l.id === id);
+    if (id === BLOCKING_SCENE_ID) edit((d) => withScene(d, blockingScene()));
+    else if (listing) edit((d) => withScene(d, bundledScene(listing.asset)));
+  };
+  const doAddModel = () =>
+    readBinary(".glb,.gltf,model/gltf-binary,model/gltf+json", (bytes, name) => {
+      uploadModel(bytes)
+        .then((info) => {
+          edit((d) => addModel(d, info));
+          setMessages([`${name}: ${info.triangles} triangles added on the ground. Colours are flat in the depth guide; only geometry matters there.`]);
+        })
+        .catch((e: Error) => setMessages([`${name}: ${e.message}`]));
+    });
   const aspectId = aspectIdOf(doc.resolution);
   const sensorId = SENSOR_PRESETS.find((s) => s.heightMm === doc.sensorHeightMm)?.id ?? "custom";
 
@@ -176,11 +227,31 @@ export function App() {
             gizmo={gizmo}
             showPip={showPip}
             onGizmoCommit={(target, value) => edit((d) => upsertKey(d, target, frame, value))}
+            onAssetError={(m) => setMessages([m])}
           />
           <div className="pip-label">Shot camera ({doc.resolution.width}x{doc.resolution.height})</div>
           {rotHere && <div className="rot-readout">recovered camera: {rotHere.rotErrDeg.toFixed(1)}° off the authored aim at frame {rotHere.frame}</div>}
         </div>
         <aside>
+          <section>
+            <h3>Scene</h3>
+            <label>
+              Set
+              <select value={sceneId} onChange={(e) => chooseScene(e.target.value)}>
+                <option value={BLOCKING_SCENE_ID}>Blocking set (primitives)</option>
+                {scenes.map((l) => <option key={l.id} value={l.id}>{l.label} (glTF)</option>)}
+                {sceneId === "custom" && <option value="custom">Custom</option>}
+              </select>
+            </label>
+            <button onClick={doAddModel}>Add glTF / GLB...</button>
+            {modelNodes(doc).filter((n) => n.id !== "set").map((n) => (
+              <div key={n.id} className="row modelrow">
+                <span className="mono">{n.id}</span>
+                <button onClick={() => edit((d) => removeNode(d, n.id))}>Remove</button>
+              </div>
+            ))}
+            <p className="hint">Models stay in the depth guide the server renders for the takes, so keep them under 200k triangles.</p>
+          </section>
           <section>
             <h3>Gizmo</h3>
             <label><input type="radio" checked={gizmo === "position"} onChange={() => setGizmo("position")} /> Position (yellow)</label>
@@ -248,12 +319,12 @@ export function App() {
           <RunPanel
             shot={validation.ok ? validation.value : null}
             resolution={doc.resolution}
-            selectedSeed={recoveredSeed}
-            onShowTake={showTake}
+            onRun={setRun}
             onClearTake={() => { setRecoveredDoc(null); setRecoveredSeed(null); }}
           />
         </aside>
       </main>
+      {run && <ContactSheet run={run} segments={doc.segments.length} selectedSeed={recoveredSeed} onSelect={selectTake} onRepair={repair} repairCredits={repairCredits} />}
       <Timeline
         doc={doc}
         frame={frame}

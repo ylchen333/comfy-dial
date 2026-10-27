@@ -2,9 +2,11 @@ import { Canvas, useFrame, useThree } from "@react-three/fiber";
 import { Grid, Line, OrbitControls, TransformControls } from "@react-three/drei";
 import { useEffect, useMemo, useRef, useState } from "react";
 import * as THREE from "three";
+import { GLTFLoader } from "three/examples/jsm/loaders/GLTFLoader.js";
 import type { Pose, Vec3 } from "@comfy-osh/rig-core";
 import type { Aligned } from "../logic/align.ts";
 import { evalChannel } from "../logic/keys.ts";
+import { assetUrl, hasGround, isModelAsset } from "../logic/scenes.ts";
 import type { StudioDoc } from "../logic/types.ts";
 
 export type GizmoTarget = "position" | "aim";
@@ -17,15 +19,36 @@ interface Props {
   gizmo: GizmoTarget;
   showPip: boolean;
   onGizmoCommit: (target: GizmoTarget, value: Vec3) => void;
+  onAssetError: (msg: string) => void;
 }
 
 const FRUSTUM_DEPTH = 2.2;
 
-function SceneObjects({ doc }: { doc: StudioDoc }) {
+/** A glTF/GLB node, loaded from the local server. The depth guide is rendered from the same file, so what you see is what the guide shows. */
+function GlbModel({ asset, transform, onError }: { asset: string; transform: StudioDoc["scene"]["nodes"][number]["transform"]; onError: (msg: string) => void }) {
+  const [obj, setObj] = useState<THREE.Object3D | null>(null);
+  const onErrorRef = useRef(onError);
+  onErrorRef.current = onError;
+  useEffect(() => {
+    let dead = false;
+    new GLTFLoader().load(
+      assetUrl(asset),
+      (g) => { if (!dead) setObj(g.scene); },
+      undefined,
+      () => { if (!dead) onErrorRef.current(`could not load ${asset} (is \`pnpm serve\` running?)`); },
+    );
+    return () => { dead = true; };
+  }, [asset]);
+  if (!obj) return null;
+  return <primitive object={obj} position={transform.position as Vec3} quaternion={new THREE.Quaternion(...transform.quaternion)} scale={transform.scale as Vec3} />;
+}
+
+function SceneObjects({ doc, onAssetError }: { doc: StudioDoc; onAssetError: (msg: string) => void }) {
   return (
     <>
       {doc.scene.nodes.map((n) => {
         const t = n.transform;
+        if (isModelAsset(n.asset)) return <GlbModel key={`${n.id}:${n.asset}`} asset={n.asset} transform={t} onError={onAssetError} />;
         const kind = n.asset.replace("primitive:", "");
         if (kind === "plane") return null; // the ground is drawn by the editor grid
         const common = { position: t.position as Vec3, quaternion: new THREE.Quaternion(...t.quaternion) };
@@ -45,10 +68,12 @@ function SceneObjects({ doc }: { doc: StudioDoc }) {
           </mesh>
         );
       })}
-      <mesh rotation={[-Math.PI / 2, 0, 0]} position={[0, -0.001, 0]} receiveShadow>
-        <planeGeometry args={[20, 20]} />
-        <meshStandardMaterial color="#6b8c61" />
-      </mesh>
+      {hasGround(doc) && (
+        <mesh rotation={[-Math.PI / 2, 0, 0]} position={[0, -0.001, 0]} receiveShadow>
+          <planeGeometry args={[20, 20]} />
+          <meshStandardMaterial color="#6b8c61" />
+        </mesh>
+      )}
     </>
   );
 }
@@ -154,7 +179,7 @@ function Gizmos({ doc, frame, pose, gizmo, onGizmoCommit }: Pick<Props, "doc" | 
   );
 }
 
-export function Viewport({ doc, frame, poses, recovered, gizmo, showPip, onGizmoCommit }: Props) {
+export function Viewport({ doc, frame, poses, recovered, gizmo, showPip, onGizmoCommit, onAssetError }: Props) {
   const helpers = useRef<THREE.Group>(null);
   const pose = poses[Math.min(frame, poses.length - 1)]!;
   const aspect = doc.resolution.width / doc.resolution.height;
@@ -171,7 +196,7 @@ export function Viewport({ doc, frame, poses, recovered, gizmo, showPip, onGizmo
     <Canvas camera={{ position: [9, 7, 11], fov: 45, near: 0.1, far: 500 }} gl={{ antialias: true }} style={{ background: "#1b1e24" }}>
       <ambientLight intensity={0.7} />
       <directionalLight position={[6, 10, 4]} intensity={1.2} />
-      <SceneObjects doc={doc} />
+      <SceneObjects doc={doc} onAssetError={onAssetError} />
       <group ref={helpers}>
         <Grid args={[40, 40]} cellSize={1} sectionSize={5} cellColor="#3a4150" sectionColor="#566074" fadeDistance={60} infiniteGrid position={[0, 0.002, 0]} />
         <FrustumGizmo pose={pose} aspect={aspect} />

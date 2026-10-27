@@ -16,6 +16,10 @@ export const POSE_STRIDE = 4; // matches the calibration set (31 frames of 121)
 export interface Tools {
   /** Keep every `stride`-th frame (DA3 multiview is run on a decimated clip, as in calibration). */
   decimate(src: string, dst: string, stride: number): Promise<void>;
+  /** Copy `count` frames starting at frame `start` into a new clip at `fps` (no audio). */
+  trim(src: string, dst: string, start: number, count: number, fps: number): Promise<void>;
+  /** First `headFrames` frames of `head`, then all of `tail`, re-encoded as one clip. */
+  stitch(head: string, headFrames: number, tail: string, dst: string, fps: number): Promise<void>;
   /** DA3 extrinsics/intrinsics text -> comfy-osh/poses/1 JSON (comfy_nodes/poses.py). */
   buildPoses(extrinsics: string, intrinsics: string, out: string, fps: number, stride: number): Promise<void>;
   /** python -m verifier score. */
@@ -28,6 +32,21 @@ export const realTools: Tools = {
       "-y", "-loglevel", "error", "-i", src,
       "-vf", `select='not(mod(n\\,${stride}))',setpts=N/(25/${stride})/TB`,
       "-an", "-r", String(25 / stride), "-c:v", "libx264", "-pix_fmt", "yuv420p", dst,
+    ]);
+  },
+  async trim(src, dst, start, count, fps) {
+    await exec("ffmpeg", [
+      "-y", "-loglevel", "error", "-i", src,
+      "-vf", `select='between(n\\,${start}\\,${start + count - 1})',setpts=N/${fps}/TB`,
+      "-an", "-r", String(fps), "-frames:v", String(count), "-c:v", "libx264", "-crf", "12", "-pix_fmt", "yuv420p", dst,
+    ]);
+  },
+  async stitch(head, headFrames, tail, dst, fps) {
+    await exec("ffmpeg", [
+      "-y", "-loglevel", "error", "-i", head, "-i", tail,
+      "-filter_complex",
+      `[0:v]select='lt(n\\,${headFrames})',setpts=N/${fps}/TB[a];[1:v]setpts=N/${fps}/TB[b];[a][b]concat=n=2:v=1:a=0[v]`,
+      "-map", "[v]", "-r", String(fps), "-c:v", "libx264", "-crf", "12", "-pix_fmt", "yuv420p", dst,
     ]);
   },
   async buildPoses(extrinsics, intrinsics, out, fps, stride) {
@@ -49,4 +68,10 @@ export const realTools: Tools = {
 /** Test/dry-run variant that needs no ffmpeg: the mock "video" is a stand-in file. */
 export const copyDecimate: Tools["decimate"] = async (src, dst) => {
   copyFileSync(src, dst);
+};
+export const copyTrim: Tools["trim"] = async (src, dst) => {
+  copyFileSync(src, dst);
+};
+export const copyStitch: Tools["stitch"] = async (_head, _n, tail, dst) => {
+  copyFileSync(tail, dst);
 };

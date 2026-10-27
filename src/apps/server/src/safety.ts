@@ -7,6 +7,9 @@ export const COLD_START_CREDITS = 8;
 export const MAX_LIVE_TAKES = 5;
 export const MAX_LIVE_CREDITS = 60;
 
+/** One repair = one take-length job + one DA3 re-solve + a cold-start margin. Measured: 8 credits on a warm worker (Oct 26). */
+export const REPAIR_CREDITS = CREDITS_PER_TAKE + CREDITS_PER_DA3 + COLD_START_CREDITS;
+
 export const estimateCredits = (n: number) => n * (CREDITS_PER_TAKE + CREDITS_PER_DA3) + COLD_START_CREDITS;
 
 /** Returns an error message when a live run must be refused, else null. */

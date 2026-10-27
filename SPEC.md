@@ -19,7 +19,7 @@
 | Generate N takes | ComfyUI-CachedSearch | Scores **aesthetics**, not camera |
 | Measure adherence | shotdrift (2D labels only) | No 3D solve; we measure **camera path and move direction** (dolly vs zoom is advisory, see §6 status) |
 | Rank | CachedSearch (by aesthetics) | Not by camera error |
-| Repair only the failing segment | Nobody | **Our wedge** |
+| Repair only the failing segment | Higgsfield Katana (Oct 2026) regenerates "only the affected shots", but only when **you** spot the problem and ask in chat | Nothing picks the segment from a **measured** camera error. **Our wedge** |
 
 - **Defensible claim:** "First tool that diffs the generated clip's recovered 3D camera against the path you drew, then ranks takes and regenerates only the segments that drift."
 - **Prize targets:** Most Innovative · Open Weights Only · LTX VFX bonus ($2,000). Best Overall is automatic.
@@ -36,7 +36,7 @@
 | 0:30 | 3D overlay: drawn path (white) vs recovered paths (colored), live numbers | "Then the app does what no released tool does: it recovers the camera from every take and measures it against the path you drew." |
 | 0:45 | Ranked list, take 6 flagged red after frame 60 | "Take 3 held the dolly within two degrees. Take 6 drifted after frame sixty." |
 | 0:55 | Only segment 3 of take 6 regenerates; its score turns green | "So we don't reroll the whole shot. We regenerate only the segment that drifted, with stronger guidance." |
-| 1:05 | Dolly zoom test | **If it passes:** "Hardest test: the dolly zoom. We flag when the model zoomed instead of dollying." **If it fails:** "And when the model can't do a move, the verifier says so. No guessing." |
+| 1:05 | Dolly zoom test | **Decided Oct 26 (evidence: 5 real takes, `docs/calibration.md`):** the "if it fails" line, reworded to what the numbers support. "Hardest test: the dolly zoom. Rotation held on all five takes, but translation and field of view are unreliable on a zooming shot, so the verifier can't promise to tell a dolly zoom from a plain zoom. It says so, and its move label matched on two of five. No guessing." Do **not** use "we flag when the model zoomed instead of dollying". |
 | 1:15 | Stack card, repo link, #OpenSourceHiggsfield | "Open weights only: LTX and Depth Anything 3, on Comfy through the SDK. MIT licensed. Camera control you can check." |
 
 Rules for the video: no Higgsfield UI, logos or footage. Use our own mock preset menu. CC0 scenes only.
@@ -262,6 +262,7 @@ Licence: **MIT**. Don't copy CozyClay (AGPL) or archviz workflows (CC BY-SA).
 | Segment seams visible | Regenerate from segment start to end of clip instead |
 | Cloud concurrency (1–5) | Default N=4; queue; show progress via `job.events()` |
 | Credits burn | Low-res drafts for scoring, full-res only for the winner |
+| Official criteria (Oct 24): Open Weights Only = "run everything locally, no $$ other than compute"; this Mac has no LTX weights | Run the same graphs once on a self-hosted ComfyUI (own GPU or rented GPU = compute) via `COMFY_BASE_URL`; record proof in docs/spikes/local.md |
 
 ---
 
@@ -273,19 +274,25 @@ Licence: **MIT**. Don't copy CozyClay (AGPL) or archviz workflows (CC BY-SA).
 - [ ] Optional: link to try
 - [ ] Social post tagged **#OpenSourceHiggsfield**
 - [ ] SFW, no unlicensed IP or likenesses; one submission
-- [ ] Open Weights Only: no partner nodes or APIs anywhere in the graph
+- [ ] Open Weights Only: no partner nodes or APIs anywhere in the graph. Official criteria (Oct 24): "Run everything locally, no $$ needed other than compute." Cloud is fine for development, but show the loop running on a self-hosted ComfyUI with zero paid calls.
+- [ ] Replay mode: bundled takes + poses (`tests/golden/loop_runs/`) so a judge without a GPU can run studio → scores → ranking in under 2 minutes.
 
 ## 11. Re-check the week of submission
 
 - GeoFix (arXiv 2610.14293): unread; may narrow the "first" claim.
 - OmniCam + shotdrift repos: did either add a "diff the generated camera" feature?
 - PartiCam (arXiv 2609.39504): code released?
-- ~~Does running open weights on Comfy Cloud qualify for Open Weights Only?~~ **Answered Oct 18 (Deep Mehta, relayed by the project owner): yes.**
+- ~~Does running open weights on Comfy Cloud qualify for Open Weights Only?~~ **Answered Oct 18 (Deep Mehta, relayed by the project owner): yes.** ⚠️ Official criteria posted Oct 24 say "run everything locally", so treat a self-hosted run as required. Still to ask: can one entry win a main prize + the LTX bonus?
 
 ---
 
 **Parking Lot**
 - Splats, lens/DoF layer, Blender/Nuke camera export, phone controller, photo-to-splat.
 - `CS_VERIFIER` adapter so CachedSearch users can plug in our camera scorer.
+- "Bring your own generator" (the "like lego" ask): any API-format workflow whose depth-video input and video output nodes are named in a small JSON map. The verifier already scores any clip.
+- Shareable score card ("Did the AI obey? 1.0° off") for Most Viral.
+- Expose the scorer as an MCP tool / Claude skill (Katana precedent).
 
-**Quick Next Move:** Open `INITIAL_PROMPT.txt`, paste it into Claude Code inside an empty `comfy-osh/` folder with this SPEC.md copied in.
+**Status (Oct 26):** M3 repair is built: `ltx25_extend_segment` graph (validates on Cloud, no partner nodes), `repairSegment`, `pnpm repair`, studio "Repair segment" button, `pnpm preflight`. One live sample: dolly-zoom take 3002, segment 3 went from 3.1° (failed) to 2.5° (holds), whole-clip rot 1.80° to 1.58°, 8 credits. One sample at a near-gate value (gate 2.75°) is not a rate: run the unguided push_in takes (all segments fail) and a few more seeds before the demo claims a success rate. Guidance strength is capped at 1.0 by the contract, so a default-strength repair differs by seed and pinned context only.
+
+**Quick Next Move:** Run the self-hosted proof (`docs/spikes/local.md`, `pnpm preflight` first), then freeze Wed noon.

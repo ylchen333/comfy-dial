@@ -46,3 +46,28 @@ aside input[type="range"], aside select, aside input[type="number"] { width: 100
 
 .viewport { position: relative; }
 .rot-readout { position: absolute; left: 12px; bottom: 12px; padding: 4px 8px; border-radius: 4px; background: rgba(15, 18, 24, 0.85); color: #3fd2ff; font: 12px ui-monospace, monospace; }
+
+.modelrow { align-items: center; justify-content: space-between; margin-top: 4px; }
+
+.sheet { background: #1d2128; border-top: 1px solid #2c323d; padding: 6px 10px 8px; }
+.sheet-head { display: flex; gap: 14px; align-items: baseline; flex-wrap: wrap; margin-bottom: 6px; }
+.sheet-head .summary { color: #d8dce4; }
+.tiles { display: flex; gap: 10px; overflow-x: auto; padding-bottom: 4px; }
+.tile { flex: none; width: 190px; padding: 6px; text-align: left; border: 2px solid #3d4452; border-radius: 6px; background: #232831; color: inherit; }
+.tile.pass { border-color: #1f6f43; } .tile.fail { border-color: #8a2b2b; }
+.tile.sel { outline: 2px solid #3fd2ff; outline-offset: 1px; }
+.tile .thumb { position: relative; aspect-ratio: 3 / 2; background: #11141a; border-radius: 4px; overflow: hidden; display: grid; place-items: center; }
+.tile .thumb video { width: 100%; height: 100%; object-fit: cover; }
+.tile .novideo { color: #667086; font-size: 11px; }
+.tile .rank { position: absolute; left: 6px; top: 6px; background: rgba(15, 18, 24, 0.85); padding: 1px 6px; border-radius: 3px; font-weight: 600; }
+.tile .badge { position: absolute; right: 6px; top: 6px; padding: 1px 5px; border-radius: 3px; font-weight: 600; color: #fff; }
+.tile .badge.ok { background: #1f6f43; } .tile .badge.bad { background: #8a2b2b; }
+.tile .segs { display: flex; gap: 3px; margin: 6px 0 4px; }
+.tile .seg { flex: 1; text-align: center; font-size: 10px; padding: 1px 0; border-radius: 2px; color: #fff; }
+.tile .seg.ok { background: #1f6f43; } .tile .seg.drift { background: #c0392b; } .tile .seg.unsolved { background: #4a5160; }
+.tile .meta { font-size: 11px; color: #aab2c2; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+
+.tilewrap { flex: none; display: flex; flex-direction: column; gap: 4px; }
+.tile .meta.fixed { color: #6fd39a; } .tile .meta.unfixed { color: #e0a45a; }
+.tilewrap .repair { width: 190px; padding: 5px 6px; border: 1px solid #3fd2ff; border-radius: 6px; background: #1b2a33; color: #bfefff; cursor: pointer; }
+.tilewrap .repair:disabled { opacity: 0.6; cursor: default; }

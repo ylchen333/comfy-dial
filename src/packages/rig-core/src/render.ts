@@ -6,6 +6,7 @@ import type { Shot } from "@comfy-osh/contracts";
 import { quatToMat3, type Quat, type Vec3 } from "./math.ts";
 import { vFovDegToFocalPx } from "./fov.ts";
 import type { Pose } from "./sampler.ts";
+import { buildBvh, hitBvh, isPrimitiveAsset, meshHit, type MeshResolver, type WorldBvh } from "./mesh.ts";
 
 export interface DepthNormalization {
   mode: "fixed";
@@ -24,7 +25,7 @@ export function denormalizeDepth(v: number, n: DepthNormalization = DEFAULT_DEPT
   return n.near * Math.exp((1 - v) * Math.log(n.far / n.near));
 }
 
-type Kind = "plane" | "box" | "cylinder";
+type Kind = "plane" | "box" | "cylinder" | "mesh";
 interface Prim {
   kind: Kind;
   id: string;
@@ -34,6 +35,7 @@ interface Prim {
   invS: Vec3;
   pos: Vec3;
   color: Vec3;
+  bvh?: WorldBvh; // kind "mesh": triangles already in world space
 }
 
 const COLORS: Record<string, Vec3> = {
@@ -43,12 +45,17 @@ const COLORS: Record<string, Vec3> = {
   pillar_r: [0.35, 0.5, 0.85],
 };
 
-function buildPrims(scene: Shot["scene"]): Prim[] {
+function buildPrims(scene: Shot["scene"], meshes?: MeshResolver): Prim[] {
   return scene.nodes.map((n) => {
-    const kind = n.asset.replace("primitive:", "") as Kind;
-    if (kind !== "plane" && kind !== "box" && kind !== "cylinder") throw new Error(`unsupported asset ${n.asset}`);
     const R = quatToMat3(n.transform.quaternion as Quat);
     const s = n.transform.scale;
+    if (!isPrimitiveAsset(n.asset)) {
+      if (!meshes) throw new Error(`asset ${n.asset} needs a mesh resolver (glTF/GLB nodes cannot be rendered without one)`);
+      const bvh = buildBvh(meshes(n.asset), n.transform.position as Vec3, R, s as Vec3);
+      return { kind: "mesh", id: n.id, A: [1, 0, 0, 0, 1, 0, 0, 0, 1], o: [0, 0, 0], R, invS: [1, 1, 1], pos: [0, 0, 0], color: [0.7, 0.7, 0.7], bvh };
+    }
+    const kind = n.asset.replace("primitive:", "") as Kind;
+    if (kind !== "plane" && kind !== "box" && kind !== "cylinder") throw new Error(`unsupported asset ${n.asset}`);
     const invS: Vec3 = [1 / s[0], 1 / s[1], 1 / s[2]];
     // A = S^-1 * R^T
     const A = [
@@ -172,6 +179,7 @@ export function renderFrame(
   // camera axes in world space (columns of Rc)
   const rx = [Rc[0]!, Rc[3]!, Rc[6]!], ry = [Rc[1]!, Rc[4]!, Rc[7]!], rz = [Rc[2]!, Rc[5]!, Rc[8]!];
   for (const p of prims) {
+    if (p.bvh) continue;
     const dx = cam[0] - p.pos[0], dy = cam[1] - p.pos[1], dz = cam[2] - p.pos[2];
     const A = p.A;
     p.o = [A[0]! * dx + A[1]! * dy + A[2]! * dz, A[3]! * dx + A[4]! * dy + A[5]! * dz, A[6]! * dx + A[7]! * dy + A[8]! * dz];
@@ -188,16 +196,23 @@ export function renderFrame(
       const wy = xn * rx[1]! + yn * ry[1]! - rz[1]!;
       const wz = xn * rx[2]! + yn * ry[2]! - rz[2]!;
       let best = Infinity, bi = -1;
-      let bnx = 0, bny = 0, bnz = 0, blx = 0, bly = 0, blz = 0;
+      let bnx = 0, bny = 0, bnz = 0, blx = 0, bly = 0, blz = 0, btri = -1;
       for (let i = 0; i < prims.length; i++) {
         const p = prims[i]!, A = p.A;
+        if (p.bvh) {
+          if (hitBvh(p.bvh, cam[0], cam[1], cam[2], wx, wy, wz, best)) {
+            best = meshHit.t; bi = i; btri = meshHit.tri;
+            bnx = meshHit.nx; bny = meshHit.ny; bnz = meshHit.nz;
+          }
+          continue;
+        }
         const dx = A[0]! * wx + A[1]! * wy + A[2]! * wz;
         const dy = A[3]! * wx + A[4]! * wy + A[5]! * wz;
         const dz = A[6]! * wx + A[7]! * wy + A[8]! * wz;
         const ok = p.kind === "plane" ? hitPlane(p.o, dx, dy, dz, best) : p.kind === "box" ? hitBox(p.o, dx, dy, dz, best) : hitCylinder(p.o, dx, dy, dz, best);
         if (ok) {
           best = hit.t; bi = i;
-          bnx = hit.nx; bny = hit.ny; bnz = hit.nz; blx = hit.lx; bly = hit.ly; blz = hit.lz;
+          bnx = hit.nx; bny = hit.ny; bnz = hit.nz; blx = hit.lx; bly = hit.ly; blz = hit.lz; btri = -1;
         }
       }
       const idx = py * W + px;
@@ -211,6 +226,19 @@ export function renderFrame(
         depth8[idx] = 0;
       } else {
         const p = prims[bi]!;
+        if (p.bvh) {
+          // mesh hit: the normal is already in world space; flat triangle colour, no checker
+          const lam = Math.max(0, bnx * SUN[0]! + bny * SUN[1]! + bnz * SUN[2]!);
+          const shade = 0.35 + 0.65 * lam, c = p.bvh.colors;
+          r = c[btri * 3]! * shade; g = c[btri * 3 + 1]! * shade; b = c[btri * 3 + 2]! * shade;
+          depthZ[idx] = best;
+          depth8[idx] = Math.round(normalizeDepth(best, norm) * 255);
+          const o = idx * 3;
+          rgb[o] = Math.round(Math.min(1, r) * 255);
+          rgb[o + 1] = Math.round(Math.min(1, g) * 255);
+          rgb[o + 2] = Math.round(Math.min(1, b) * 255);
+          continue;
+        }
         // world normal = normalize(R * (S^-1 * n_local))
         const sx = bnx * p.invS[0], sy = bny * p.invS[1], sz = bnz * p.invS[2];
         const R = p.R;
@@ -239,7 +267,8 @@ export function* renderClip(
   shot: Pick<Shot, "scene" | "resolution">,
   poses: readonly Pose[],
   norm: DepthNormalization = DEFAULT_DEPTH_NORM,
+  meshes?: MeshResolver,
 ): Generator<Frame> {
-  const prims = buildPrims(shot.scene);
+  const prims = buildPrims(shot.scene, meshes);
   for (const pose of poses) yield renderFrame(shot, pose, norm, prims);
 }

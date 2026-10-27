@@ -10,6 +10,8 @@
     "test": "pnpm -r test && uv run pytest verifier",
     "typecheck": "pnpm -r typecheck",
     "loop": "pnpm --filter @comfy-osh/server loop",
+    "preflight": "pnpm --filter @comfy-osh/server preflight",
+    "repair": "pnpm --filter @comfy-osh/server repair",
     "serve": "pnpm --filter @comfy-osh/server serve"
   },
   "devDependencies": {

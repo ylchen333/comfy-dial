@@ -5,6 +5,7 @@ import { existsSync, mkdirSync, readFileSync, readdirSync, renameSync } from "no
 import { join, resolve } from "node:path";
 import type { Shot } from "@comfy-osh/contracts";
 import { DEFAULT_DEPTH_NORM, renderClip, sampleShot } from "@comfy-osh/rig-core";
+import { AssetStore, hasMeshNodes } from "./assets.ts";
 import { SRC_DIR } from "./tools.ts";
 
 export interface Guide { path: string; near: number; far: number }
@@ -21,12 +22,15 @@ export function findGoldenGuide(shotId: string): Guide | null {
   return null;
 }
 
-const shotHash = (shot: Shot) => createHash("sha1").update(JSON.stringify(shot)).digest("hex").slice(0, 16);
+const shotHash = (shot: Shot, assetKey: string) => createHash("sha1").update(JSON.stringify(shot)).update(assetKey).digest("hex").slice(0, 16);
+
+/** Default store: bundled scenes plus the studio's upload folder (the API passes its own). */
+const bundledOnly = () => new AssetStore(resolve(SRC_DIR, "apps/server/.runs/studio/uploads"));
 
 /** Render the fixed-normalization depth video for any Shot (needs ffmpeg). Cached under cacheDir by content hash. */
-export async function renderGuide(shot: Shot, cacheDir: string): Promise<Guide> {
+export async function renderGuide(shot: Shot, cacheDir: string, assets: AssetStore = bundledOnly()): Promise<Guide> {
   mkdirSync(cacheDir, { recursive: true });
-  const out = join(cacheDir, `${shotHash(shot)}.depth.mp4`);
+  const out = join(cacheDir, `${shotHash(shot, assets.contentKey(shot))}.depth.mp4`);
   const guide = { path: out, near: DEFAULT_DEPTH_NORM.near, far: DEFAULT_DEPTH_NORM.far };
   if (existsSync(out)) return guide;
   const { width: w, height: h } = shot.resolution;
@@ -44,7 +48,7 @@ export async function renderGuide(shot: Shot, cacheDir: string): Promise<Guide> 
   });
   closed.catch(() => {}); // surfaced below; avoids an unhandled rejection if ffmpeg dies mid-write
   ff.stdin.on("error", () => {});
-  for (const f of renderClip(shot, sampleShot(shot), DEFAULT_DEPTH_NORM)) {
+  for (const f of renderClip(shot, sampleShot(shot), DEFAULT_DEPTH_NORM, hasMeshNodes(shot) ? assets.resolver() : undefined)) {
     if (!ff.stdin.write(f.depth8)) await new Promise<void>((r) => ff.stdin.once("drain", () => r()));
   }
   ff.stdin.end();
@@ -53,7 +57,7 @@ export async function renderGuide(shot: Shot, cacheDir: string): Promise<Guide> 
   return guide;
 }
 
-/** Golden clip first (CLI behaviour), else render. */
-export async function ensureGuide(shot: Shot, cacheDir: string): Promise<Guide> {
-  return findGoldenGuide(shot.id) ?? (await renderGuide(shot, cacheDir));
+/** Golden clip first (CLI behaviour; never for a shot with glTF nodes, whose geometry the clip does not show), else render. */
+export async function ensureGuide(shot: Shot, cacheDir: string, assets: AssetStore = bundledOnly()): Promise<Guide> {
+  return (hasMeshNodes(shot) ? null : findGoldenGuide(shot.id)) ?? (await renderGuide(shot, cacheDir, assets));
 }

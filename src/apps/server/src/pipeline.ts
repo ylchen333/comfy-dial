@@ -4,7 +4,7 @@ import { existsSync, mkdirSync, readFileSync, readdirSync, writeFileSync } from 
 import { basename, join } from "node:path";
 import { Poses, ScoreReport, type ControlPacket, type Shot } from "@comfy-osh/contracts";
 import { isTransientError, type ComfyClient, type Graph } from "./client.ts";
-import { buildPoseGraph, buildTakeGraph } from "./graph.ts";
+import { buildPoseGraph, buildSegmentGraph, buildTakeGraph, SEGMENT_CONTEXT_FRAMES, segmentWindow } from "./graph.ts";
 import { moveCheck, rankTakes, verdict, type Ranked, type TableRow } from "./rank.ts";
 import { idempotencyKey, submitOnce, type JobStore } from "./store.ts";
 import { POSE_STRIDE, type Tools } from "./tools.ts";
@@ -97,9 +97,10 @@ async function chain(
   seed: number,
   graph: Graph,
   firstJobId: string,
+  name = `s${seed}`,
 ): Promise<TakeOutcome> {
-  const id = `${o.shot.id}-s${seed}`;
-  const dir = join(o.outDir, `s${seed}`);
+  const id = `${o.shot.id}-${name}`;
+  const dir = join(o.outDir, name);
   mkdirSync(dir, { recursive: true });
   const log = o.log ?? (() => {});
   const fail = (note: string, takeJobId: string | null, daJobId: string | null): TakeOutcome => {
@@ -129,7 +130,7 @@ async function chain(
     // 2. DA3 poses job on the decimated take
     let rec2 = o.store.take(id)!;
     if (!rec2.extrinsics || !existsSync(rec2.extrinsics)) {
-      const decim = join(dir, `take_s${seed}_dec.mp4`);
+      const decim = join(dir, `take_${name}_dec.mp4`);
       await o.tools.decimate(takeVideo, decim, POSE_STRIDE);
       const upName = await o.client.uploadFile(decim);
       const pg = buildPoseGraph({ videoFile: upName, tag: id });
@@ -164,6 +165,85 @@ async function chain(
   } catch (e) {
     return fail(`error: ${(e as Error).message}`, takeJobId, daJobId);
   }
+}
+
+export interface RepairOptions extends Omit<LoopOptions, "n" | "seedBase" | "allowUnguided"> {
+  /** Outcome of the take being repaired (its stored video must exist). */
+  take: TakeOutcome;
+  /** Segment index to regenerate; defaults to the first drifted segment. */
+  segment?: number;
+  /** attention_strength for the regeneration (contract max 1.0); at least the take's. At 1.0 the levers are the new seed and the pinned context. */
+  strength: number;
+  /** Defaults to seed + 1 so the repair is not a replay of the failed sample. */
+  seed?: number;
+}
+
+export interface RepairResult {
+  before: TakeOutcome;
+  after: TakeOutcome;
+  segment: number;
+  /** Frame where the regenerated clip starts (0 = segment 0, whole take redone). */
+  fromFrame: number;
+  improved: boolean;
+}
+
+/**
+ * Regenerate one drifted segment of a take, then re-score the WHOLE patched clip (seam check).
+ * The new clip continues from 9 original frames just before the segment and runs to the end of
+ * the shot (SPEC section 9: seams fallback). Segment 0 has nothing to continue from, so the take is redone.
+ */
+export async function repairSegment(o: RepairOptions): Promise<RepairResult> {
+  const { shot, take } = o;
+  const log = o.log ?? (() => {});
+  const k = o.segment ?? take.verdict.badSegments[0];
+  if (k === undefined) throw new Error(`${take.id} has no drifted segment to repair`);
+  if (!take.verdict.badSegments.includes(k)) throw new Error(`segment ${k} of ${take.id} did not drift; refusing to spend a job on it`);
+  if (o.strength < o.packet.iclora.strength) throw new Error(`repair strength ${o.strength} must be at least the take's ${o.packet.iclora.strength}`);
+  const rec = o.store.take(take.id);
+  if (!rec?.takeVideo || !existsSync(rec.takeVideo)) throw new Error(`no stored video for ${take.id}`);
+
+  const seed = o.seed ?? take.seed + 1;
+  const win = segmentWindow(shot, k);
+  const name = `s${take.seed}-r${k}`;
+  const id = `${shot.id}-${name}`;
+  const dir = join(o.outDir, name);
+  mkdirSync(dir, { recursive: true });
+  const packet = { ...o.packet, iclora: { ...o.packet.iclora, strength: o.strength } };
+  const pre = `repair seg ${k} of ${take.id}:`;
+
+  let graph: Graph;
+  const guideFile = win.hasContext ? await trimUpload(o, o.guidePath, join(dir, "guide_seg.mp4"), win.ctxStart, win.length) : await o.client.uploadFile(o.guidePath);
+  if (win.hasContext) {
+    const contextFile = await trimUpload(o, rec.takeVideo, join(dir, "context.mp4"), win.ctxStart, SEGMENT_CONTEXT_FRAMES);
+    graph = buildSegmentGraph({ shot, packet, guideFile, contextFile, prompt: o.prompt, seed, window: win });
+  } else {
+    graph = buildTakeGraph({ shot, packet, guideFile, prompt: o.prompt, seed });
+  }
+  log(`${pre} regenerating frames ${win.ctxStart}-${shot.frames - 1} at strength ${o.strength}, seed ${seed}`);
+
+  const lo: LoopOptions = { ...o, n: 1, seedBase: seed };
+  const job = await runJob(lo, "repair", seed, graph, (takeKey) => o.store.patchTake(id, { seed, takeKey }));
+  if (job.error) throw new Error(`${pre} job failed: ${job.error}`);
+  const files = (await o.client.download(job.jobId, join(dir, "take"))).filter((f) => /\.(mp4|webm|mov)$/i.test(f));
+  const fresh = files.find((f) => !/guide|depth|context/i.test(basename(f))) ?? files[0];
+  if (!fresh) throw new Error(`${pre} job produced no video`);
+
+  let patched = fresh;
+  if (win.hasContext) {
+    patched = join(dir, "patched.mp4");
+    await o.tools.stitch(rec.takeVideo, win.ctxStart, fresh, patched, shot.fps);
+  }
+  o.store.patchTake(id, { seed, takeVideo: patched });
+  const after = await chain(lo, seed, graph, job.jobId, name);
+  // Improved = the repaired segment now passes the frozen gate and no segment that passed before fails now.
+  // Not the composite: it carries translation error, which is ungated on focal-changing shots.
+  const improved = after.report.solveOk && !after.verdict.badSegments.includes(k) && after.verdict.badSegments.every((b) => take.verdict.badSegments.includes(b));
+  return { before: take, after, segment: k, fromFrame: win.ctxStart, improved };
+}
+
+async function trimUpload(o: RepairOptions, src: string, dst: string, start: number, count: number): Promise<string> {
+  await o.tools.trim(src, dst, start, count, o.shot.fps);
+  return o.client.uploadFile(dst);
 }
 
 export const listDir = (d: string) => (existsSync(d) ? readdirSync(d) : []);
