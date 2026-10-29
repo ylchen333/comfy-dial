@@ -59,7 +59,7 @@ describe("alignRecovered", () => {
 import { runBlocker } from "../src/logic/runs.ts";
 
 describe("runBlocker", () => {
-  const health = { ok: true, liveAvailable: true, calibratedResolution: { width: 768, height: 512 }, maxLiveTakes: 5, repairCredits: 13 };
+  const health = { ok: true, liveAvailable: true, calibratedResolution: { width: 768, height: 512 }, maxLiveTakes: 5, repairCredits: 13, referenceCredits: 9, actorCredits: 24, cloud: true };
   const base = { valid: true, live: true, health, resolution: { width: 768, height: 512 }, confirmed: true };
   it("allows a confirmed live run at the calibrated resolution", () => expect(runBlocker(base)).toBeNull());
   it("explains each refusal", () => {

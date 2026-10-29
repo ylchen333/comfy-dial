@@ -11,6 +11,7 @@
     "typecheck": "pnpm -r typecheck",
     "loop": "pnpm --filter @comfy-osh/server loop",
     "preflight": "pnpm --filter @comfy-osh/server preflight",
+    "replay": "pnpm --filter @comfy-osh/server replay",
     "repair": "pnpm --filter @comfy-osh/server repair",
     "serve": "pnpm --filter @comfy-osh/server serve"
   },

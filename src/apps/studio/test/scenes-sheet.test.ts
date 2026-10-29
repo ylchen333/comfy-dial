@@ -2,7 +2,7 @@ import { describe, expect, it } from "vitest";
 import { newDoc } from "../src/logic/keys.ts";
 import { applyPreset } from "../src/logic/presets.ts";
 import { validateDoc } from "../src/logic/io.ts";
-import { addModel, blockingScene, bundledScene, hasGround, modelNodes, removeNode, sceneIdOf, withScene, type SceneListing } from "../src/logic/scenes.ts";
+import { ACTOR_STAND, BLOCKING_SCENE_ID, SUBJECT_BOX, addModel, blockingScene, bundledScene, hasGround, keepSubject, modelNodes, removeNode, sceneIdOf, subjectAssetOf, withScene, withSubject, type SceneListing } from "../src/logic/scenes.ts";
 import type { TakeView } from "../src/logic/runs.ts";
 import { metricsLine, repairLine, repairTarget, segmentStates, sheetSummary, verdictOf } from "../src/logic/sheet.ts";
 
@@ -91,5 +91,35 @@ describe("repair", () => {
     const fixed = take({ segments: [{ rotDeg: 0.7, pass: true }, { rotDeg: 1.5, pass: true }, { rotDeg: 2.5, pass: true }], repair: { segment: 2, fromFrame: 72, improved: true, before: { rotDeg: 1.8, segments: drifted.segments } } });
     expect(repairLine(fixed)).toBe("segment 3 regenerated: 3.1° → 2.5°, now holds");
     expect(repairLine(take({}))).toBeNull();
+  });
+});
+
+describe("subject", () => {
+  it("withSubject swaps the subject's asset in place, keeping its position (presets and checks aim at it), and back to the box", () => {
+    const base = newDoc();
+    const pos = base.scene.nodes.find((n) => n.id === "subject")!.transform.position;
+    const actor = withSubject(base, ACTOR_STAND);
+    const node = actor.scene.nodes.find((n) => n.id === "subject")!;
+    expect(node.asset).toBe(ACTOR_STAND);
+    expect(node.transform.position).toEqual(pos);
+    expect(node.transform.scale).toEqual([1, 1, 1]);
+    expect(actor.scene.nodes).toHaveLength(base.scene.nodes.length);
+    expect(subjectAssetOf(actor)).toBe(ACTOR_STAND);
+    const back = withSubject(actor, SUBJECT_BOX);
+    expect(back.scene.nodes.find((n) => n.id === "subject")!.transform.scale).toEqual([0.6, 1.8, 0.6]);
+    expect(validateDoc(actor).ok).toBe(true);
+  });
+  it("a mannequin subject does not make the scene 'custom' or show up as a removable model", () => {
+    const actor = withSubject(newDoc(), ACTOR_STAND);
+    expect(sceneIdOf(actor, LISTINGS)).toBe(BLOCKING_SCENE_ID);
+    expect(modelNodes(actor)).toEqual([]);
+    const street = withScene(actor, keepSubject(actor, bundledScene("scenes/street.glb")));
+    expect(sceneIdOf(street, LISTINGS)).toBe("street");
+    expect(subjectAssetOf(street)).toBe(ACTOR_STAND);
+  });
+  it("switching sets keeps the chosen subject", () => {
+    const d = withSubject(newDoc(), ACTOR_STAND);
+    const blocking = keepSubject(d, blockingScene());
+    expect(blocking.nodes.find((n) => n.id === "subject")!.asset).toBe(ACTOR_STAND);
   });
 });

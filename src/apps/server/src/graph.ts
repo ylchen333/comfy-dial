@@ -7,6 +7,26 @@ import type { Graph } from "./client.ts";
 
 export const WORKFLOWS_DIR = resolve(dirname(fileURLToPath(import.meta.url)), "../../../workflows");
 
+export interface DecodeTiling { tile_size: number; overlap: number; temporal_size: number; temporal_overlap: number }
+
+/** Largest clip decoded in a single tile (pixels x frames); above it we tile, with a wide temporal overlap. About 768x512x180. */
+export const SINGLE_TILE_BUDGET = 70_000_000;
+
+/**
+ * VAEDecodeTiled settings for a clip. The shipped template used 64-frame temporal tiles with an 8-frame overlap, which left
+ * visible brightness seams at frames 56 and 112 of every 121-frame take (measured on 14 live takes: the worst jump was at a seam
+ * in 12 of them, median 2.1x the rest of the clip). One tile that covers the whole clip has no seams. Both sizes are multiples
+ * of the node's steps (32 px, 4 frames).
+ */
+export function decodeTiling(res: { width: number; height: number }, frames: number): DecodeTiling {
+  const up = (v: number, m: number) => Math.ceil(v / m) * m;
+  if (res.width * res.height * frames <= SINGLE_TILE_BUDGET) {
+    return { tile_size: Math.min(4096, up(Math.max(res.width, res.height) + 32, 32)), overlap: 64, temporal_size: Math.min(4096, up(frames, 4) + 4), temporal_overlap: 8 };
+  }
+  // Too big for one tile: overlap by half a tile so the blend between tiles is long and gentle instead of an 8-frame seam.
+  return { tile_size: 640, overlap: 128, temporal_size: 96, temporal_overlap: 48 };
+}
+
 /** SKILLS.md section 4: only Small/Base. Never Large/Giant/Metric. */
 export const DA3_ALLOWED_MODELS = ["da3_small.safetensors", "da3_base.safetensors"] as const;
 export const DA3_MODEL = "da3_base.safetensors";
@@ -31,6 +51,8 @@ export interface TakeParams {
   /** Name LoadVideo must use: the cloud_name returned by upload of the depth guide. */
   guideFile: string;
   prompt: string;
+  /** Text for what to avoid; the template's own negative stays when omitted. */
+  negative?: string | undefined;
   seed: number;
   /** Negative-control only: allow strength 0 (LTX then ignores the guide and the take is unguided). */
   allowUnguided?: boolean | undefined;
@@ -48,11 +70,13 @@ export function buildTakeGraph(p: TakeParams): Graph {
   const g = loadTemplate("ltx25_union_depth.api.json");
   patch(g, "2", "LTXICLoRALoaderModelOnly", { lora_name: lora });
   patch(g, "6", "CLIPTextEncode", { text: p.prompt });
+  if (p.negative) patch(g, "7", "CLIPTextEncode", { text: p.negative });
   patch(g, "8", "LTXVConditioning", { frame_rate: shot.fps });
   patch(g, "9", "LoadVideo", { file: p.guideFile });
   patch(g, "11", "EmptyLTXVLatentVideo", { width: shot.resolution.width, height: shot.resolution.height, length: shot.frames });
   patch(g, "12", "LTXAddVideoICLoRAGuide", { strength: packet.iclora.strength });
   patch(g, "13", "LTXVEmptyLatentAudio", { frames_number: shot.frames, frame_rate: shot.fps });
+  patch(g, "22", "VAEDecodeTiled", { ...decodeTiling(shot.resolution, shot.frames) });
   patch(g, "16", "RandomNoise", { noise_seed: seed });
   patch(g, "24", "CreateVideo", { fps: shot.fps });
   patch(g, "25", "SaveVideo", { filename_prefix: `video/loop/${shot.id}_s${seed}` });
@@ -101,11 +125,13 @@ export function buildSegmentGraph(p: SegmentParams): Graph {
   const g = loadTemplate("ltx25_extend_segment.api.json");
   patch(g, "2", "LTXICLoRALoaderModelOnly", { lora_name: lora });
   patch(g, "6", "CLIPTextEncode", { text: p.prompt });
+  if (p.negative) patch(g, "7", "CLIPTextEncode", { text: p.negative });
   patch(g, "8", "LTXVConditioning", { frame_rate: shot.fps });
   patch(g, "9", "LoadVideo", { file: p.guideFile });
   patch(g, "11", "EmptyLTXVLatentVideo", { width: shot.resolution.width, height: shot.resolution.height, length: window.length });
   patch(g, "12", "LTXAddVideoICLoRAGuide", { strength: packet.iclora.strength });
   patch(g, "13", "LTXVEmptyLatentAudio", { frames_number: window.length, frame_rate: shot.fps });
+  patch(g, "22", "VAEDecodeTiled", { ...decodeTiling(shot.resolution, window.length) });
   patch(g, "16", "RandomNoise", { noise_seed: seed });
   patch(g, "24", "CreateVideo", { fps: shot.fps });
   patch(g, "25", "SaveVideo", { filename_prefix: `video/loop/${shot.id}_s${seed}_seg` });
@@ -132,5 +158,23 @@ export function buildPoseGraph(p: PoseParams): Graph {
   patch(g, "3", "DownloadAndLoadDepthAnythingV3Model", { model });
   patch(g, "5", "SaveText", { filename_prefix: `da3/${p.tag}/extrinsics` });
   patch(g, "6", "SaveText", { filename_prefix: `da3/${p.tag}/intrinsics` });
+  return g;
+}
+
+/** Optional actor generation (image, then shape). Both graphs are open-weights only: FLUX.1 schnell (Apache-2.0) and Hunyuan3D 2.1 (Tencent licence, dev use). */
+export const ACTOR_IMAGE_SIZE = { width: 768, height: 1024 };
+
+export function buildActorImageGraph(p: { prompt: string; seed: number }): Graph {
+  const g = loadTemplate("actor_image_schnell.api.json");
+  patch(g, "2", "CLIPTextEncode", { text: p.prompt });
+  patch(g, "5", "KSampler", { seed: p.seed });
+  patch(g, "4", "EmptyLatentImage", ACTOR_IMAGE_SIZE);
+  return g;
+}
+
+export function buildActorMeshGraph(p: { imageFile: string; seed: number }): Graph {
+  const g = loadTemplate("actor_mesh_hunyuan21.api.json");
+  patch(g, "1", "LoadImage", { image: p.imageFile });
+  patch(g, "7", "KSampler", { seed: p.seed });
   return g;
 }

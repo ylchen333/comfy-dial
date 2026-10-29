@@ -20,6 +20,8 @@ export interface Tools {
   trim(src: string, dst: string, start: number, count: number, fps: number): Promise<void>;
   /** First `headFrames` frames of `head`, then all of `tail`, re-encoded as one clip. */
   stitch(head: string, headFrames: number, tail: string, dst: string, fps: number): Promise<void>;
+  /** Pick `count` evenly spaced frames of a reference video into a small clip DA3 can solve; returns the source duration. */
+  sample(src: string, dst: string, count: number): Promise<{ durationSec: number; frames: number }>;
   /** DA3 extrinsics/intrinsics text -> comfy-osh/poses/1 JSON (comfy_nodes/poses.py). */
   buildPoses(extrinsics: string, intrinsics: string, out: string, fps: number, stride: number): Promise<void>;
   /** python -m verifier score. */
@@ -49,6 +51,26 @@ export const realTools: Tools = {
       "-map", "[v]", "-r", String(fps), "-c:v", "libx264", "-crf", "12", "-pix_fmt", "yuv420p", dst,
     ]);
   },
+  async sample(src, dst, count) {
+    const { stdout } = await exec("ffprobe", [
+      "-v", "error", "-select_streams", "v:0", "-count_frames",
+      "-show_entries", "stream=nb_read_frames,avg_frame_rate", "-of", "json", src,
+    ], { maxBuffer: 1024 * 1024 }).catch(() => { throw new Error("that file is not a readable video (is ffmpeg installed?)"); });
+    const st = (JSON.parse(stdout) as { streams?: { nb_read_frames?: string; avg_frame_rate?: string }[] }).streams?.[0];
+    const n = Number(st?.nb_read_frames);
+    const [num, den] = String(st?.avg_frame_rate ?? "0/1").split("/").map(Number);
+    const fps = (num ?? 0) / (den || 1);
+    if (!st || !Number.isFinite(n) || n < 3 || !(fps > 0)) throw new Error("that file has no readable video (need at least 3 frames)");
+    const durationSec = (n - 1) / fps;
+    const k = Math.min(count, n);
+    const idx = [...new Set(Array.from({ length: k }, (_, i) => Math.round((i * (n - 1)) / (k - 1))))];
+    await exec("ffmpeg", [
+      "-y", "-loglevel", "error", "-i", src,
+      "-vf", `select='${idx.map((i) => `eq(n\\,${i})`).join("+")}',setpts=N/8/TB,scale=min(768\\,iw):-2`,
+      "-an", "-r", "8", "-c:v", "libx264", "-pix_fmt", "yuv420p", dst,
+    ]);
+    return { durationSec, frames: idx.length };
+  },
   async buildPoses(extrinsics, intrinsics, out, fps, stride) {
     await exec("uv", ["run", "python", "comfy_nodes/poses.py", extrinsics, intrinsics, out, String(fps), String(stride)], {
       cwd: SRC_DIR,
@@ -74,4 +96,8 @@ export const copyTrim: Tools["trim"] = async (src, dst) => {
 };
 export const copyStitch: Tools["stitch"] = async (_head, _n, tail, dst) => {
   copyFileSync(tail, dst);
+};
+export const copySample: Tools["sample"] = async (src, dst) => {
+  copyFileSync(src, dst);
+  return { durationSec: 4.8, frames: 121 };
 };

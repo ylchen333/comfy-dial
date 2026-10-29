@@ -5,15 +5,14 @@ import { metricsLine, repairLine, repairTarget, segmentStates, sheetSummary, ver
 interface Props {
   run: RunView;
   segments: number;
-  selectedSeed: number | null;
-  onSelect: (t: TakeView) => void;
   onRepair: (t: TakeView, segment: number) => void;
+  onReview: (seed: number) => void;
   repairCredits: number;
 }
 
-interface TileProps { run: RunView; t: TakeView; segments: number; selected: boolean; onSelect: (t: TakeView) => void; onRepair: Props["onRepair"]; repairCredits: number }
+interface TileProps { run: RunView; t: TakeView; segments: number; onRepair: Props["onRepair"]; onReview: Props["onReview"]; repairCredits: number }
 
-function Tile({ run, t, segments, selected, onSelect, onRepair, repairCredits }: TileProps) {
+function Tile({ run, t, segments, onRepair, onReview, repairCredits }: TileProps) {
   const video = useRef<HTMLVideoElement>(null);
   const [armed, setArmed] = useState(false); // live repair spends credits: first click arms, second sends
   const verdict = verdictOf(t);
@@ -31,11 +30,11 @@ function Tile({ run, t, segments, selected, onSelect, onRepair, repairCredits }:
     <div className="tilewrap">
     <button
       type="button"
-      className={`tile ${selected ? "sel" : ""} ${verdict === "PASS" ? "pass" : "fail"}`}
-      onClick={() => onSelect(t)}
+      className={`tile ${verdict === "PASS" ? "pass" : "fail"}`}
+      onClick={() => onReview(t.seed)}
       onMouseEnter={() => void video.current?.play().catch(() => {})}
       onMouseLeave={() => { video.current?.pause(); }}
-      title={t.hasPoses ? "Click to draw this take's recovered path" : "No recovered path for this take"}
+      title="Open this take in Review"
     >
       <div className="thumb">
         {t.hasVideo ? (
@@ -65,18 +64,19 @@ function Tile({ run, t, segments, selected, onSelect, onRepair, repairCredits }:
 }
 
 /** Ranked takes as tiles: video, verdict, per-segment strip, errors. Click a tile to overlay its recovered camera path. */
-export function ContactSheet({ run, segments, selectedSeed, onSelect, onRepair, repairCredits }: Props) {
+export function ContactSheet({ run, segments, onRepair, onReview, repairCredits }: Props) {
   if (run.takes.length === 0) return null;
   return (
     <section className="sheet">
       <div className="sheet-head">
-        <strong>Contact sheet</strong>
+        <h2>Takes</h2>
         <span className="mono">{run.live ? "LIVE" : "DRY"} run {run.id}</span>
         <span className="summary">{sheetSummary(run.takes)}</span>
+        <button type="button" onClick={() => onReview(run.takes[0]!.seed)}>Open best take in Review</button>
         <span className="hint">*move label is advisory and does not change PASS</span>
       </div>
       <div className="tiles">
-        {run.takes.map((t) => <Tile key={t.seed} run={run} t={t} segments={segments} selected={t.seed === selectedSeed} onSelect={onSelect} onRepair={onRepair} repairCredits={repairCredits} />)}
+        {run.takes.map((t) => <Tile key={t.seed} run={run} t={t} segments={segments} onRepair={onRepair} onReview={onReview} repairCredits={repairCredits} />)}
       </div>
     </section>
   );

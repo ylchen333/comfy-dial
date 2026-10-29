@@ -7,6 +7,7 @@ import { parseArgs } from "node:util";
 import { ControlPacket, ScoreReport, Shot } from "@comfy-osh/contracts";
 import { CliComfyClient } from "./cli-client.ts";
 import { loadEnvFile } from "./env.ts";
+import { cleanPrompt, DEFAULT_NEGATIVE, DEFAULT_PROMPT, MAX_NEGATIVE, MAX_PROMPT } from "./prompt.ts";
 import { ensureGuide } from "./guide.ts";
 import { repairSegment, type TakeOutcome } from "./pipeline.ts";
 import { verdict } from "./rank.ts";
@@ -17,7 +18,6 @@ import { realTools, SRC_DIR } from "./tools.ts";
 const CWD = process.env.INIT_CWD ?? process.cwd();
 const here = dirname(fileURLToPath(import.meta.url));
 const IC_LORA = "ltx-2.3-22b-ic-lora-union-control-ref0.5";
-const DEFAULT_PROMPT = "A cinematic shot of a single subject in a room, soft natural light, smooth steady camera motion.";
 
 const die = (msg: string): never => {
   console.error(msg);
@@ -30,7 +30,7 @@ async function main() {
     options: {
       run: { type: "string" }, shot: { type: "string" }, take: { type: "string" }, segment: { type: "string" },
       strength: { type: "string", default: "1.0" }, "orig-strength": { type: "string", default: "1.0" },
-      seed: { type: "string" }, prompt: { type: "string", default: DEFAULT_PROMPT }, guide: { type: "string" },
+      seed: { type: "string" }, prompt: { type: "string", default: DEFAULT_PROMPT }, negative: { type: "string", default: DEFAULT_NEGATIVE }, guide: { type: "string" },
     },
   });
   if (!a.run || !a.shot || !a.take) die("usage: pnpm repair --run <run dir> --shot <shot.json> --take <take id> [--segment k] [--strength 1.0]");
@@ -57,7 +57,7 @@ async function main() {
   const before = await cloud.credits();
   if (before !== null) console.log(`credits before: ${before}`);
   const r = await repairSegment({
-    shot, shotPath, packet, guidePath: guide.path, prompt: a.prompt!, outDir: runDir, client: cloud, store, tools: realTools,
+    shot, shotPath, packet, guidePath: guide.path, prompt: cleanPrompt(a.prompt, MAX_PROMPT, DEFAULT_PROMPT, "--prompt"), negative: cleanPrompt(a.negative, MAX_NEGATIVE, DEFAULT_NEGATIVE, "--negative"), outDir: runDir, client: cloud, store, tools: realTools,
     take, strength: Number(a.strength), ...(a.segment !== undefined ? { segment: Number(a.segment) } : {}),
     ...(a.seed !== undefined ? { seed: Number(a.seed) } : {}), log: (m) => console.log(m),
   });

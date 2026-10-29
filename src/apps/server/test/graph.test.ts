@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { buildPoseGraph, buildTakeGraph } from "../src/graph.ts";
+import { buildPoseGraph, buildSegmentGraph, buildTakeGraph, decodeTiling, segmentWindow, SINGLE_TILE_BUDGET } from "../src/graph.ts";
 import { loadShot, packetFor } from "./helpers.ts";
 
 const shot = loadShot();
@@ -43,5 +43,30 @@ describe("buildPoseGraph", () => {
     for (const m of ["da3_large.safetensors", "da3_giant.safetensors", "da3metric_large.safetensors"]) {
       expect(() => buildPoseGraph({ videoFile: "v.mp4", tag: "t", model: m })).toThrow(/not allowed/);
     }
+  });
+});
+
+
+describe("VAE decode tiling", () => {
+  it("covers a standard 768x512x121 take in ONE spatial and ONE temporal tile (no seam frames)", () => {
+    const t = decodeTiling({ width: 768, height: 512 }, 121);
+    expect(t.tile_size).toBeGreaterThanOrEqual(768);
+    expect(t.temporal_size).toBeGreaterThanOrEqual(121);
+    expect(t.tile_size % 32).toBe(0);
+    expect(t.temporal_size % 4).toBe(0);
+  });
+  it("sizes a repair window from its own length, and both graphs carry it", () => {
+    const w = segmentWindow(shot, 2);
+    expect(decodeTiling(shot.resolution, w.length).temporal_size).toBeGreaterThanOrEqual(w.length);
+    const take = buildTakeGraph({ shot, packet: packetFor(shot), guideFile: "g", prompt: "p", seed: 1 });
+    const seg = buildSegmentGraph({ shot, packet: packetFor(shot), guideFile: "g", contextFile: "c", prompt: "p", seed: 1, window: w });
+    expect(take["22"]!.inputs.temporal_size).toBeGreaterThanOrEqual(shot.frames);
+    expect(seg["22"]!.inputs.temporal_size).toBeGreaterThanOrEqual(w.length);
+  });
+  it("a clip too big for one tile is tiled with a long overlap, not the old 8-frame seam", () => {
+    expect(768 * 512 * 121).toBeLessThan(SINGLE_TILE_BUDGET);
+    const big = decodeTiling({ width: 1536, height: 1024 }, 241);
+    expect(big.temporal_overlap).toBeGreaterThanOrEqual(32);
+    expect(big.temporal_size - big.temporal_overlap).toBeLessThan(big.temporal_size);
   });
 });

@@ -45,7 +45,7 @@ const COLORS: Record<string, Vec3> = {
   pillar_r: [0.35, 0.5, 0.85],
 };
 
-function buildPrims(scene: Shot["scene"], meshes?: MeshResolver): Prim[] {
+export function buildPrims(scene: Shot["scene"], meshes?: MeshResolver): Prim[] {
   return scene.nodes.map((n) => {
     const R = quatToMat3(n.transform.quaternion as Quat);
     const s = n.transform.scale;

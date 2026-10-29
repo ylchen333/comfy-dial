@@ -8,6 +8,7 @@ import { ControlPacket, Shot } from "@comfy-osh/contracts";
 import { CliComfyClient } from "./cli-client.ts";
 import type { ComfyClient } from "./client.ts";
 import { loadEnvFile } from "./env.ts";
+import { cleanPrompt, DEFAULT_NEGATIVE, DEFAULT_PROMPT, MAX_NEGATIVE, MAX_PROMPT } from "./prompt.ts";
 import { ensureGuide } from "./guide.ts";
 import { MockClient } from "./mock-client.ts";
 import { runLoop } from "./pipeline.ts";
@@ -19,7 +20,6 @@ import { copyDecimate, POSE_STRIDE, realTools, SRC_DIR, type Tools } from "./too
 const CWD = process.env.INIT_CWD ?? process.cwd(); // pnpm --filter runs scripts inside the package dir
 const here = dirname(fileURLToPath(import.meta.url));
 const IC_LORA = "ltx-2.3-22b-ic-lora-union-control-ref0.5";
-const DEFAULT_PROMPT = "A cinematic shot of a single subject in a room, soft natural light, smooth steady camera motion.";
 
 const die = (msg: string): never => {
   console.error(msg);
@@ -34,6 +34,7 @@ async function main() {
       live: { type: "boolean", default: false },
       "dry-run": { type: "boolean", default: false },
       prompt: { type: "string", default: DEFAULT_PROMPT },
+      negative: { type: "string", default: DEFAULT_NEGATIVE },
       guide: { type: "string" },
       strength: { type: "string", default: "1.0" },
       "seed-base": { type: "string", default: "1000" },
@@ -91,7 +92,7 @@ async function main() {
   if (before !== null) console.log(`credits before: ${before}`);
   const store = new JobStore(join(outDir, "jobs.json"));
   const ranked = await runLoop({
-    shot, shotPath, packet, guidePath: guide!.path, prompt: a.prompt!, allowUnguided: a["allow-unguided"]!, n,
+    shot, shotPath, packet, guidePath: guide!.path, prompt: cleanPrompt(a.prompt, MAX_PROMPT, DEFAULT_PROMPT, "--prompt"), negative: cleanPrompt(a.negative, MAX_NEGATIVE, DEFAULT_NEGATIVE, "--negative"), allowUnguided: a["allow-unguided"]!, n,
     seedBase: Number(a["seed-base"]), outDir, client, store, tools,
     resubmitPending: a["resubmit-pending"]!,
     log: (m) => console.log(m),

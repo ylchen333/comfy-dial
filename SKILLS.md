@@ -107,6 +107,7 @@ Put them in `.claude/skills/` so every worktree agent shares them.
 | `camera-adherence-eval` | How to run the verifier: Sim(3)/Umeyama alignment, rot/trans/FOV error, per-segment scoring, the golden test, perturbation set (reversed, half amplitude, zoom-for-dolly, wrong orbit). "A change to `verifier/` is done only when the golden test passes." | `skill-creator` (with evals) |
 | `comfy-osh-graphs` | Which API-format graph does what, node IDs to `setInput`, frame rule (1+8k), `attention_strength`, SDK idempotency rules (save `{key → jobId}` before awaiting) | `skill-creator` |
 | `licence-guard` | Allowed: LTX-2.x Community, DA3 Small/Base (Apache-2.0), COLMAP/GLOMAP (BSD), TAPIR/BootsTAP (Apache-2.0). **Banned:** DA3 Large/Giant, CoTracker3, SpatialTracker v2 (CC BY-NC), `evo` (GPL), CozyClay code (AGPL), any partner node/API | `skill-creator` |
+| *(dev-use exception, Oct 29)* | **Optional actor generation only:** Hunyuan3D 2.1 shape model (local weights node chain, not the `Tencent*` partner nodes) and FLUX.1 schnell (Apache-2.0). Hunyuan3D's Tencent licence excludes the EU, UK and South Korea and bars using outputs to train other models, so generated meshes are never bundled or committed (they live in the runs folder). Tripo is a partner API: banned. | n/a |
 
 ---
 

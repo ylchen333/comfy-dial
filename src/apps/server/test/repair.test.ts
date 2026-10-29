@@ -73,6 +73,12 @@ describe("repairSegment", () => {
     await expect(repairSegment({ ...o, take: bad, strength: 0.7 })).rejects.toThrow(/at least/);
   });
 
+  it("refuses a segment that follows an earlier drifted segment", async () => {
+    const { o, bad } = await drifted();
+    const early = { ...bad, verdict: { pass: false, badSegments: [0, 2] } };
+    await expect(repairSegment({ ...o, take: early, segment: 2, strength: 1 })).rejects.toThrow(/repair segment 1 first/);
+  });
+
   it("rerun with the same inputs submits nothing new", async () => {
     const { o, client, bad } = await drifted();
     await repairSegment({ ...o, take: bad, strength: 1 });

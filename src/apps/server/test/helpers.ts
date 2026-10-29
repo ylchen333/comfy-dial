@@ -2,7 +2,7 @@ import { mkdtempSync, readFileSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join, resolve } from "node:path";
 import { ControlPacket, ScoreReport, Shot } from "@comfy-osh/contracts";
-import { copyDecimate, copyStitch, copyTrim, SRC_DIR, type Tools } from "../src/tools.ts";
+import { copyDecimate, copySample, copyStitch, copyTrim, SRC_DIR, type Tools } from "../src/tools.ts";
 
 export const FIXTURES = resolve(SRC_DIR, "packages/contracts/fixtures");
 export const loadShot = (name = "push_in") => Shot.parse(JSON.parse(readFileSync(join(FIXTURES, "shots", `${name}.json`), "utf8")));
@@ -27,6 +27,7 @@ export const guideFile = () => {
 export const fakeTools = (shot: Shot): Tools => ({
   decimate: copyDecimate,
   trim: copyTrim,
+  sample: copySample,
   stitch: copyStitch,
   async buildPoses(ext, _i, out, fps) {
     const empty = readFileSync(ext, "utf8").includes('"extrinsics":[]');

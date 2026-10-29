@@ -256,9 +256,9 @@
         "4",
         0
       ],
-      "tile_size": 512,
+      "tile_size": 800,
       "overlap": 64,
-      "temporal_size": 64,
+      "temporal_size": 128,
       "temporal_overlap": 8
     }
   },

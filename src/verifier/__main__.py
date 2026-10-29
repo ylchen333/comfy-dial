@@ -26,7 +26,19 @@ def main(argv=None):
     cl = sub.add_parser("classify", help="advisory move class (focal ratio) of authored vs recovered")
     cl.add_argument("--shot", required=True)
     cl.add_argument("--poses", required=True)
+    fk = sub.add_parser("flicker", help="brightness jitter and seam spikes of generated clips")
+    fk.add_argument("videos", nargs="+")
+    fk.add_argument("--seams", default="", help="comma-separated frames to check, e.g. 56,112 (temporal tile seams)")
     a = ap.parse_args(argv)
+    if a.cmd == "flicker":
+        from .flicker import decode_gray, report, table
+
+        seams = tuple(int(x) for x in a.seams.split(",") if x.strip())
+        rows = [(v, report(decode_gray(v), seams)) for v in a.videos]
+        print(table(rows))
+        print()
+        print(json.dumps({v: r for v, r in rows}, indent=2))
+        return 0
     if a.cmd == "floor":
         from .floor import floor, table
 

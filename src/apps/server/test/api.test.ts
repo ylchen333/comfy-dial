@@ -11,8 +11,8 @@ const shot = loadShot();
 const servers: { close(): void }[] = [];
 afterEach(() => servers.splice(0).forEach((s) => s.close()));
 
-async function boot(env: Record<string, string> = {}, live = false) {
-  const runsDir = tmp();
+async function boot(env: Record<string, string> = {}, live = false, dir?: string) {
+  const runsDir = dir ?? tmp();
   const server = createApi({
     runsDir, env, tools: fakeTools(shot),
     ...(live ? { liveClient: () => new MockClient({ shot, stride: 4 }) } : {}),
@@ -30,7 +30,7 @@ async function boot(env: Record<string, string> = {}, live = false) {
     }
     throw new Error("run did not finish");
   };
-  return { base, post, poll };
+  return { base, post, poll, runsDir };
 }
 
 describe("studio API", () => {
@@ -72,6 +72,23 @@ describe("studio API", () => {
     expect(fixed.hasPoses).toBe(true);
     expect((await go()).status).toBe(409);
     expect((await fetch(`${base}/api/runs/${v.id}/takes/${v.takes.find((t) => !t.solveOk)!.seed}/repair`, { method: "POST", body: "{}" })).status).toBe(400);
+  });
+
+  it("a finished run reloads from disk after a server restart: same ranking, shot, poses, and it appears in the run list", async () => {
+    const first = await boot();
+    const v = await first.poll(((await (await first.post({ shot, n: 4 })).json()) as RunView).id);
+    servers.pop()!.close();
+    const second = await boot({}, false, first.runsDir);
+    const list = (await (await fetch(`${second.base}/api/runs`)).json()) as { id: string; takes: number; live: boolean }[];
+    expect(list.find((r) => r.id === v.id)).toMatchObject({ takes: 4, live: false });
+    const again = (await (await fetch(`${second.base}/api/runs/${v.id}`)).json()) as RunView;
+    expect(again.state).toBe("done");
+    expect(again.shot.id).toBe(shot.id);
+    expect(again.takes.map((t) => [t.seed, t.rank, t.pass])).toEqual(v.takes.map((t) => [t.seed, t.rank, t.pass]));
+    const withPoses = again.takes.find((t) => t.hasPoses)!;
+    expect((await fetch(`${second.base}/api/runs/${v.id}/takes/${withPoses.seed}/poses`)).status).toBe(200);
+    expect((await fetch(`${second.base}/api/runs/${v.id}/takes/${again.takes[0]!.seed}/repair`, { method: "POST", body: "{}" })).status).toBe(409); // view only
+    expect((await fetch(`${second.base}/api/runs/deadbeef`)).status).toBe(404);
   });
 
   it("rejects an invalid shot and a bad n", async () => {

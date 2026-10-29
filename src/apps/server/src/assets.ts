@@ -1,17 +1,18 @@
-// Scene assets a Shot can reference: bundled sets (src/assets/scenes) and glTF/GLB files uploaded from the studio.
-// A Shot node names them as "scenes/<file>" or "uploads/<file>"; nothing else is ever resolved, so no path escapes.
+// Scene assets a Shot can reference: bundled sets (src/assets/scenes), bundled actors (src/assets/actors) and glTF/GLB files
+// uploaded from the studio. A Shot node names them as "scenes/<file>", "actors/<file>" or "uploads/<file>"; nothing else is ever resolved, so no path escapes.
 import { createHash } from "node:crypto";
-import { existsSync, mkdirSync, readFileSync, readdirSync, writeFileSync } from "node:fs";
+import { copyFileSync, existsSync, mkdirSync, readFileSync, readdirSync, writeFileSync } from "node:fs";
 import { join, resolve } from "node:path";
 import { countTriangles, isPrimitiveAsset, meshBounds, parseGltf, type Mesh, type MeshResolver, type Vec3 } from "@comfy-osh/rig-core";
 import type { Shot } from "@comfy-osh/contracts";
 import { SRC_DIR } from "./tools.ts";
 
 export const BUNDLED_SCENES_DIR = resolve(SRC_DIR, "assets/scenes");
+export const BUNDLED_ACTORS_DIR = resolve(SRC_DIR, "assets/actors");
 export const MAX_UPLOAD_BYTES = 25 * 1024 * 1024;
 export const MAX_TRIANGLES = 200_000;
 
-const ASSET_RE = /^(scenes|uploads)\/[A-Za-z0-9_-]+\.(glb|gltf)$/;
+const ASSET_RE = /^(scenes|actors|uploads)\/[A-Za-z0-9_-]+\.(glb|gltf)$/;
 
 export interface SceneListing { id: string; label: string; asset: string }
 export interface UploadResult { asset: string; triangles: number; min: Vec3; max: Vec3 }
@@ -20,16 +21,18 @@ export class AssetStore {
   private readonly cache = new Map<string, Mesh[]>();
   private readonly uploadsDir: string;
   private readonly scenesDir: string;
-  constructor(uploadsDir: string, scenesDir = BUNDLED_SCENES_DIR) {
+  private readonly actorsDir: string;
+  constructor(uploadsDir: string, scenesDir = BUNDLED_SCENES_DIR, actorsDir = BUNDLED_ACTORS_DIR) {
     this.uploadsDir = uploadsDir;
     this.scenesDir = scenesDir;
+    this.actorsDir = actorsDir;
   }
 
   /** Absolute file for a Shot asset name, or null if the name is not one we serve or the file is missing. */
   fileFor(asset: string): string | null {
     if (!ASSET_RE.test(asset)) return null;
     const [kind, name] = asset.split("/") as [string, string];
-    const file = join(kind === "scenes" ? this.scenesDir : this.uploadsDir, name);
+    const file = join(kind === "scenes" ? this.scenesDir : kind === "actors" ? this.actorsDir : this.uploadsDir, name);
     return existsSync(file) ? file : null;
   }
 
@@ -39,6 +42,42 @@ export class AssetStore {
       .filter((f) => /\.glb$/.test(f))
       .sort()
       .map((f) => ({ id: f.replace(/\.glb$/, ""), label: f.replace(/\.glb$/, "").replace(/^./, (c) => c.toUpperCase()), asset: `scenes/${f}` }));
+  }
+
+  /** Bundled actors: static mannequin poses that stand in for the subject in the depth guide. */
+  listActors(): SceneListing[] {
+    if (!existsSync(this.actorsDir)) return [];
+    return readdirSync(this.actorsDir)
+      .filter((f) => /^mannequin_(stand|stride)\.glb$/.test(f))
+      .sort()
+      .map((f) => {
+        const id = f.replace(/\.glb$/, "");
+        return { id, label: id === "mannequin_stand" ? "Mannequin, standing" : "Mannequin, mid-stride", asset: `actors/${f}` };
+      });
+  }
+
+  /** Actors generated on this machine (kept beside the uploads, never bundled), newest first. */
+  listGenerated(): (SceneListing & { description: string; hasImage: boolean })[] {
+    const file = join(this.uploadsDir, "generated-actors.json");
+    if (!existsSync(file)) return [];
+    try {
+      const all = JSON.parse(readFileSync(file, "utf8")) as { asset: string; label: string; description: string }[];
+      return all.filter((a) => this.fileFor(a.asset)).reverse().map((a) => ({ id: a.asset.replace(/^uploads\//, "").replace(/\.glb$/, ""), ...a, hasImage: existsSync(join(this.uploadsDir, a.asset.replace(/^uploads\//, "").replace(/\.glb$/, ".png"))) }));
+    } catch {
+      return [];
+    }
+  }
+
+  /** Remember a generated actor (and its reference image) so the studio can offer it again. */
+  registerGenerated(asset: string, description: string, imagePath?: string): void {
+    const file = join(this.uploadsDir, "generated-actors.json");
+    let all: { asset: string; label: string; description: string }[] = [];
+    try { all = JSON.parse(readFileSync(file, "utf8")) as typeof all; } catch { /* first one */ }
+    all = all.filter((a) => a.asset !== asset);
+    all.push({ asset, label: description.length > 40 ? `${description.slice(0, 37)}...` : description || "From photo", description });
+    mkdirSync(this.uploadsDir, { recursive: true });
+    writeFileSync(file, JSON.stringify(all));
+    if (imagePath) copyFileSync(imagePath, join(this.uploadsDir, asset.replace(/^uploads\//, "").replace(/\.glb$/, ".png")));
   }
 
   /** Validate bytes as glTF, store them under a content hash, and say how big the model is. */

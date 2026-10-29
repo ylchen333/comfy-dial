@@ -15,6 +15,7 @@ export interface LoopOptions {
   packet: ControlPacket;
   guidePath: string;
   prompt: string;
+  negative?: string | undefined;
   allowUnguided?: boolean | undefined;
   n: number;
   seedBase: number;
@@ -76,7 +77,7 @@ export async function runLoop(o: LoopOptions): Promise<Ranked<TakeOutcome>[]> {
   log(`guide uploaded as ${guideFile}`);
 
   const seeds = Array.from({ length: o.n }, (_, i) => o.seedBase + i);
-  const graphs = seeds.map((seed) => buildTakeGraph({ shot: o.shot, packet: o.packet, guideFile, prompt: o.prompt, seed, allowUnguided: o.allowUnguided }));
+  const graphs = seeds.map((seed) => buildTakeGraph({ shot: o.shot, packet: o.packet, guideFile, prompt: o.prompt, negative: o.negative, seed, allowUnguided: o.allowUnguided }));
 
   // Fan-out: N submit() calls. Every key hits the store before any job is awaited.
   const firstIds = await Promise.all(
@@ -198,6 +199,10 @@ export async function repairSegment(o: RepairOptions): Promise<RepairResult> {
   const k = o.segment ?? take.verdict.badSegments[0];
   if (k === undefined) throw new Error(`${take.id} has no drifted segment to repair`);
   if (!take.verdict.badSegments.includes(k)) throw new Error(`segment ${k} of ${take.id} did not drift; refusing to spend a job on it`);
+  // Rotation error accumulates from frame 0 and the new clip is pinned to the frames before it, so repairing
+  // segment k while an earlier segment also drifted just continues from the drift (measured Oct 27: 11.8 -> 12.1 deg).
+  const earlier = take.verdict.badSegments.find((b) => b < k);
+  if (earlier !== undefined) throw new Error(`segment ${k + 1} follows a drifted segment (${earlier + 1}); repair segment ${earlier + 1} first`);
   if (o.strength < o.packet.iclora.strength) throw new Error(`repair strength ${o.strength} must be at least the take's ${o.packet.iclora.strength}`);
   const rec = o.store.take(take.id);
   if (!rec?.takeVideo || !existsSync(rec.takeVideo)) throw new Error(`no stored video for ${take.id}`);
@@ -215,9 +220,9 @@ export async function repairSegment(o: RepairOptions): Promise<RepairResult> {
   const guideFile = win.hasContext ? await trimUpload(o, o.guidePath, join(dir, "guide_seg.mp4"), win.ctxStart, win.length) : await o.client.uploadFile(o.guidePath);
   if (win.hasContext) {
     const contextFile = await trimUpload(o, rec.takeVideo, join(dir, "context.mp4"), win.ctxStart, SEGMENT_CONTEXT_FRAMES);
-    graph = buildSegmentGraph({ shot, packet, guideFile, contextFile, prompt: o.prompt, seed, window: win });
+    graph = buildSegmentGraph({ shot, packet, guideFile, contextFile, prompt: o.prompt, negative: o.negative, seed, window: win });
   } else {
-    graph = buildTakeGraph({ shot, packet, guideFile, prompt: o.prompt, seed });
+    graph = buildTakeGraph({ shot, packet, guideFile, prompt: o.prompt, negative: o.negative, seed });
   }
   log(`${pre} regenerating frames ${win.ctxStart}-${shot.frames - 1} at strength ${o.strength}, seed ${seed}`);
 
