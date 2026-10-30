@@ -183,7 +183,7 @@ class PoseFrame(_Strict):
 
 class Poses(_Strict):
     # `schema` shadows a BaseModel attribute, so the field is stored as `schema_id` under its wire name.
-    schema_id: Literal["comfy-osh/poses/1"] = Field(alias="schema")
+    schema_id: Literal["comfy-dial/poses/1"] = Field(alias="schema")
     fps: Annotated[float, Field(gt=0)]
     image: ImageSize
     solve_ok: bool

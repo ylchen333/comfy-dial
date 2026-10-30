@@ -1,4 +1,4 @@
-import { focalMmToVFovDeg, vFovDegToFocalMm } from "@comfy-osh/rig-core";
+import { focalMmToVFovDeg, vFovDegToFocalMm } from "@comfy-dial/rig-core";
 
 export const SENSOR_PRESETS = [
   { id: "ff", label: "Full frame (24 mm)", heightMm: 24 },

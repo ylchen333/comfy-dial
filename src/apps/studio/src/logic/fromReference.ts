@@ -5,8 +5,8 @@
 //  - Scale is arbitrary for a monocular solve, so the user states the camera travel in metres.
 //  - Recovered FOV is biased (about +10 deg) and under-tracks real zooms, so zoom is off by default; "ratio" uses only the
 //    change in focal length relative to the first frame.
-import type { Poses } from "@comfy-osh/contracts";
-import { FPS, quatAngleDeg, rotate, type Quat, type Vec3 } from "@comfy-osh/rig-core";
+import type { Poses } from "@comfy-dial/contracts";
+import { FPS, quatAngleDeg, rotate, type Quat, type Vec3 } from "@comfy-dial/rig-core";
 import { poseAtFrame } from "./compile.ts";
 import { evalChannel } from "./keys.ts";
 import type { Key, Result, StudioDoc } from "./types.ts";

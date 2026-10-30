@@ -28,7 +28,7 @@ describe("reference video camera", () => {
     const r = await post();
     expect(r.status).toBe(200);
     const v = (await r.json()) as { poses: { schema: string; solve_ok: boolean; frames: { t: number }[] }; durationSec: number };
-    expect(v.poses.schema).toBe("comfy-osh/poses/1");
+    expect(v.poses.schema).toBe("comfy-dial/poses/1");
     expect(v.poses.solve_ok).toBe(true);
     expect(v.poses.frames.length).toBeGreaterThan(10);
     expect(v.durationSec).toBeCloseTo(4.8, 6);

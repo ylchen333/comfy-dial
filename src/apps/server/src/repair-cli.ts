@@ -4,7 +4,7 @@ import { readFileSync } from "node:fs";
 import { dirname, isAbsolute, join, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 import { parseArgs } from "node:util";
-import { ControlPacket, ScoreReport, Shot } from "@comfy-osh/contracts";
+import { ControlPacket, ScoreReport, Shot } from "@comfy-dial/contracts";
 import { CliComfyClient } from "./cli-client.ts";
 import { loadEnvFile } from "./env.ts";
 import { cleanPrompt, DEFAULT_NEGATIVE, DEFAULT_PROMPT, MAX_NEGATIVE, MAX_PROMPT } from "./prompt.ts";

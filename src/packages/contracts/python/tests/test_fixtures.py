@@ -7,7 +7,7 @@ import pytest
 from jsonschema import Draft202012Validator
 from referencing import Registry, Resource
 
-from comfy_osh_contracts import CONTRACTS
+from comfy_dial_contracts import CONTRACTS
 
 ROOT = Path(__file__).resolve().parents[2]
 SCHEMA_FILE = {

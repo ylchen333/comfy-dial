@@ -1,5 +1,5 @@
 {
-  "name": "comfy-osh",
+  "name": "comfy-dial",
   "private": true,
   "type": "module",
   "packageManager": "pnpm@11.14.0",
@@ -9,11 +9,11 @@
   "scripts": {
     "test": "pnpm -r test && uv run pytest verifier",
     "typecheck": "pnpm -r typecheck",
-    "loop": "pnpm --filter @comfy-osh/server loop",
-    "preflight": "pnpm --filter @comfy-osh/server preflight",
-    "replay": "pnpm --filter @comfy-osh/server replay",
-    "repair": "pnpm --filter @comfy-osh/server repair",
-    "serve": "pnpm --filter @comfy-osh/server serve"
+    "loop": "pnpm --filter @comfy-dial/server loop",
+    "preflight": "pnpm --filter @comfy-dial/server preflight",
+    "replay": "pnpm --filter @comfy-dial/server replay",
+    "repair": "pnpm --filter @comfy-dial/server repair",
+    "serve": "pnpm --filter @comfy-dial/server serve"
   },
   "devDependencies": {
     "@types/node": "^22.20.5",

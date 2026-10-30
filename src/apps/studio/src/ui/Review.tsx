@@ -1,11 +1,11 @@
 import { useEffect, useMemo, useRef, useState } from "react";
-import type { Poses } from "@comfy-osh/contracts";
-import { FPS, sampleShot } from "@comfy-osh/rig-core";
+import type { Poses } from "@comfy-dial/contracts";
+import { FPS, sampleShot } from "@comfy-dial/rig-core";
 import { alignRecovered } from "../logic/align.ts";
 import { docFromShot } from "../logic/compile.ts";
 import { parsePosesDoc } from "../logic/io.ts";
 import { driftFrame, errorSamples, frameAtTime, frameAtX, niceTicks, ROT_GATE_DEG, videoTimeFor } from "../logic/review.ts";
-import { getPosesText, posesUrl, videoDownloadUrl, videoUrl, type RunView, type TakeView } from "../logic/runs.ts";
+import { getPosesText, posesUrl, upscaledDownloadUrl, upscaledSize, upscaledUrl, videoDownloadUrl, videoUrl, type RunView, type TakeView } from "../logic/runs.ts";
 import { repairTarget, verdictOf } from "../logic/sheet.ts";
 import { framingOf } from "../logic/viewControls.ts";
 import { Viewport } from "./Viewport.tsx";
@@ -17,6 +17,9 @@ interface Props {
   onClose: () => void;
   onRepair: (t: TakeView, segment: number) => void;
   repairCredits: number;
+  /** Confirm value for an upscale on Cloud; null on a local server (free, no confirmation). */
+  upscaleCredits: number | null;
+  onUpscale: (t: TakeView) => void;
 }
 
 const H = 190, L = 44, R = 12, T = 22, B = 26; // chart height and plot margins; the width follows the container
@@ -87,6 +90,35 @@ function ErrorChart({ samples, frames, frame, onFrame, segments, bad, drift }: {
   );
 }
 
+/** Optional high-resolution copy of the take (SeedVR2). The score always describes the original take; this is for viewing and export. */
+function UpscaleButton({ t, run, credits, onUpscale }: { t: TakeView; run: RunView; credits: number | null; onUpscale: Props["onUpscale"] }) {
+  const [armed, setArmed] = useState(false);
+  if (!t.hasVideo) return null;
+  const size = upscaledSize(run.shot.resolution, t.upscale?.height ?? 1024);
+  const u = t.upscale;
+  if (u?.state === "done")
+    return (
+      <>
+        <a className="btn" href={upscaledUrl(run.id, t.seed)} target="_blank" rel="noreferrer" title={`Opens the ${size} video in a new window`}>Open {size}</a>
+        <a className="btn" href={upscaledDownloadUrl(run.id, t.seed)}>Download {size}</a>
+      </>
+    );
+  const go = () => {
+    if (u?.state === "running") return;
+    if (credits !== null && !armed) return setArmed(true);
+    setArmed(false);
+    onUpscale(t);
+  };
+  return (
+    <>
+      <button type="button" className={`${credits !== null ? "spend " : ""}${armed ? "spend-armed" : ""}`} disabled={u?.state === "running"} onClick={go} onBlur={() => setArmed(false)} title="Makes a higher-resolution copy with SeedVR2. The camera score is not recomputed.">
+        {u?.state === "running" ? `Upscaling to ${size}...` : armed ? `Confirm: about ${credits} credits` : `Upscale to ${size}${credits !== null ? ` (~${credits} credits)` : ""}`}
+      </button>
+      {u?.state === "error" && <span className="hint err" title={u.error}>Upscale failed: {u.error}</span>}
+    </>
+  );
+}
+
 function RepairButton({ t, run, repairCredits, onRepair }: { t: TakeView; run: RunView; repairCredits: number; onRepair: Props["onRepair"] }) {
   const [armed, setArmed] = useState(false); // live repair spends credits: first click arms, second sends
   const target = repairTarget(t, run.live);
@@ -99,14 +131,14 @@ function RepairButton({ t, run, repairCredits, onRepair }: { t: TakeView; run: R
     onRepair(t, target);
   };
   return (
-    <button type="button" disabled={Boolean(run.repairing)} onClick={go} onBlur={() => setArmed(false)}>
-      {mine ? "Regenerating..." : armed ? `Confirm: about ${repairCredits} credits` : `Repair segment ${(target ?? 0) + 1}${run.live ? ` (~${repairCredits} credits)` : " (dry)"}`}
+    <button type="button" className={`${run.live ? "spend " : ""}${armed ? "spend spend-armed" : ""}`} disabled={Boolean(run.repairing)} onClick={go} onBlur={() => setArmed(false)}>
+      {mine ? "RUNNING…" : armed ? `Confirm: about ${repairCredits} credits` : `Repair segment ${(target ?? 0) + 1}${run.live ? ` (~${repairCredits} credits)` : " (dry)"}`}
     </button>
   );
 }
 
 /** Full-window review of one take: the video and the two camera paths on one clock, with the error curve under both. */
-export function Review({ run, seed, onSeed, onClose, onRepair, repairCredits }: Props) {
+export function Review({ run, seed, onSeed, onClose, onRepair, repairCredits, upscaleCredits, onUpscale }: Props) {
   const take = run.takes.find((t) => t.seed === seed) ?? run.takes[0]!;
   const frames = run.shot.frames;
   const doc = useMemo(() => docFromShot(run.shot), [run.shot]);
@@ -185,63 +217,112 @@ export function Review({ run, seed, onSeed, onClose, onRepair, repairCredits }: 
   const bad = run.shot.segments.map((_, i) => take.badSegments.includes(i) || !take.solveOk);
   const base = `${run.shot.id}-s${take.seed}${take.repair ? "-repaired" : ""}`;
 
+  const rotPct = Math.min(1, (take.rotDeg ?? 0) / 5) * 100;
+  const gatePct = (ROT_GATE_DEG / 5) * 100;
+  const driftAny = verdict !== "PASS";
+  const markOf = (v: string) => (v === "PASS" ? <span className="mark mark--held">Held</span> : v === "FAIL" ? <span className="mark mark--drift">Drifted</span> : <span className="mark mark--advisory">No solve</span>);
+  const onTabKey = (e: React.KeyboardEvent) => {
+    if (e.key === "ArrowLeft" || e.key === "ArrowRight") { e.preventDefault(); e.stopPropagation(); pick(e.key === "ArrowLeft" ? -1 : 1); }
+  };
+
   return (
     <div className="page review" aria-label="Review take">
       <header className="pagehead">
-        <nav className="takepick" aria-label="Takes">
-          {run.takes.map((t) => (
-            <button key={t.seed} type="button" className={t.seed === take.seed ? "on" : ""} onClick={() => { setPlaying(false); onSeed(t.seed); }}>
-              #{t.rank} seed {t.seed} <span className={`pill ${verdictOf(t) === "PASS" ? "ok" : "bad"}`}>{verdictOf(t)}</span>
-            </button>
-          ))}
-        </nav>
+        <span className="blurb">Compare each take with the move</span>
         <span className="spacer" />
-        <RepairButton t={take} run={run} repairCredits={repairCredits} onRepair={onRepair} />
-        {take.hasVideo ? <a className="btn" href={videoDownloadUrl(run.id, take.seed)} download={`${base}.mp4`}>Download video</a> : <span className="muted">{run.live ? "no video file for this take" : "dry run: no video to export"}</span>}
-        {take.hasPoses && <a className="btn" href={posesUrl(run.id, take.seed)} download={`${base}.poses.json`}>Download poses</a>}
         <button type="button" onClick={onClose}>Back to Generate (Esc)</button>
       </header>
-
-      <section className="figures">
-        <span><b>{deg(take.rotDeg)}</b> rotation error</span>
-        <span><b>{take.transPct === null ? "-" : `${take.transPct.toFixed(1)}%`}</b> translation</span>
-        <span><b>{held} of {take.segments.length || run.shot.segments.length}</b> segments held</span>
-        <span><b>{here ? deg(here.deg) : "-"}</b> at frame {frame}</span>
-        {take.move && <span><b>{take.move}</b> move (advisory)</span>}
-        <span className={verdict === "PASS" ? "good" : "warn"}>{verdict}</span>
-        {take.repair && <span className="muted">segment {take.repair.segment + 1} regenerated from frame {take.repair.fromFrame}: {deg(take.repair.before.segments[take.repair.segment]?.rotDeg)} to {deg(take.segments[take.repair.segment]?.rotDeg)}</span>}
-      </section>
-
       {run.prompt && <p className="promptline" title={`${run.prompt}${run.negative ? `\n\nAvoid: ${run.negative}` : ""}`}><span className="muted">Prompt</span> {run.prompt}</p>}
 
-      <div className="panes">
-        <figure>
-          <figcaption>Generated take</figcaption>
-          <div className="stage">
-            {take.hasVideo
-              ? <video ref={video} key={`${take.seed}:${version}`} src={videoUrl(run.id, take.seed)} muted loop playsInline preload="auto" />
-              : <span className="muted">{run.live ? "no video file for this take" : "dry run: there is no video, only the synthetic camera path"}</span>}
-          </div>
-        </figure>
-        <figure>
-          <figcaption>Camera paths <i className="dot a" /> authored <i className="dot r" /> recovered from the take</figcaption>
-          <div className="stage">
-            <span className="pip-label">Shot camera (authored), frame {frame}</span>
-            <Viewport doc={doc} frame={frame} poses={authored} recovered={recovered} gizmo="position" showPip readOnly framing={framing} onGizmoCommit={() => {}} onAssetError={() => {}} />
-          </div>
-        </figure>
-      </div>
+      <nav className="review-tabs takepick" role="tablist" aria-label="Takes">
+        {run.takes.map((t) => (
+          <button key={t.seed} type="button" role="tab" aria-selected={t.seed === take.seed} tabIndex={t.seed === take.seed ? 0 : -1} className={t.seed === take.seed ? "on" : ""} onKeyDown={onTabKey} onClick={() => { setPlaying(false); onSeed(t.seed); }}>
+            <span className="rk">#{t.rank}</span><span className="seed">{t.seed}</span><span className="rd">{deg(t.rotDeg, 2)}</span>{markOf(verdictOf(t))}
+          </button>
+        ))}
+      </nav>
 
-      <section className="scrub">
-        <div className="transport">
-          <button type="button" onClick={() => setPlaying((p) => !p)}>{playing ? "Pause" : "Play"}</button>
-          <span className="mono">frame {frame} / {frames - 1} · {(frame / FPS).toFixed(2)}s</span>
-          <span className="hint">space play/pause · ← → step (shift: 10) · Home End · [ ] switch take · click the chart to scrub</span>
+      <div className="review-body">
+        <div className="video-col">
+          <div className="video-box">
+            <div className="stage">
+              {take.hasVideo
+                ? <video ref={video} key={`${take.seed}:${version}`} src={videoUrl(run.id, take.seed)} muted loop playsInline preload="auto" />
+                : <span className="muted">{run.live ? "no video file for this take" : "dry run: there is no video, only the synthetic camera path"}</span>}
+            </div>
+          </div>
+          <section className="scrub">
+            <div className="transport">
+              <button type="button" className="key" aria-label="Start" onClick={() => step(-frames)}>&#9198;</button>
+              <button type="button" className="key" aria-label="Back one frame" onClick={() => step(-1)}>&#9664;</button>
+              <button type="button" className="key" aria-label={playing ? "Pause" : "Play"} onClick={() => setPlaying((p) => !p)}>{playing ? "II" : "\u25B6"}</button>
+              <button type="button" className="key" aria-label="Forward one frame" onClick={() => step(1)}>&#9654;</button>
+              <button type="button" className="key" aria-label="End" onClick={() => step(frames)}>&#9197;</button>
+              <span className="mono">F{String(frame).padStart(3, "0")} / {frames - 1} · {(frame / FPS).toFixed(2)}s</span>
+              <span className="hint">space play · ← → step (shift: 10) · Home End · [ ] switch take · click the chart to scrub</span>
+            </div>
+            <ErrorChart samples={samples} frames={frames} frame={frame} onFrame={(f) => { setPlaying(false); setFrame(f); }} segments={run.shot.segments} bad={bad} drift={drift} />
+            {problem && <p className="warn">{problem}</p>}
+            {!problem && take.hasPoses === false && <p className="muted">{take.solveOk ? "poses were not saved for this take" : "the pose solve failed for this take, so there is no recovered path"}</p>}
+          </section>
         </div>
-        <ErrorChart samples={samples} frames={frames} frame={frame} onFrame={(f) => { setPlaying(false); setFrame(f); }} segments={run.shot.segments} bad={bad} drift={drift} />
-        {problem && <p className="warn">{problem}</p>}
-        {!problem && take.hasPoses === false && <p className="muted">{take.solveOk ? "poses were not saved for this take" : "the pose solve failed for this take, so there is no recovered path"}</p>}
-      </section>
+
+        <aside className="side-col" aria-label="Take details">
+          <section className="side-box">
+            <h2 className="titlebar">Take {take.seed}</h2>
+            <div>{markOf(verdict)}</div>
+            <div className="score" aria-hidden="true">{deg(take.rotDeg)}</div>
+            <div className="gl-label">Rotation error</div>
+            <div className={`meter${driftAny ? " drift" : ""}`} role="img" aria-label={`Rotation error ${deg(take.rotDeg)}, pass line ${ROT_GATE_DEG}`}>
+              <i style={{ width: `${rotPct}%` }} /><span className="gate" style={{ left: `${gatePct}%` }} />
+            </div>
+            <div className="axis"><span>0°</span><span>pass line {ROT_GATE_DEG}°</span><span>5°</span></div>
+          </section>
+
+          <section className="side-box">
+            <h2 className="titlebar">Segments</h2>
+            <div className="seg-grid">
+              {run.shot.segments.map((_, i) => {
+                const sg = take.segments[i];
+                const isBad = bad[i];
+                return (
+                  <div key={i} className={`seg-cell${isBad ? " drift" : ""}`}>
+                    <span>seg {i + 1}</span><b>{sg ? deg(sg.rotDeg, 1) : "-"}</b><span>{!sg ? "n/a" : isBad ? "drifted" : "held"}</span>
+                  </div>
+                );
+              })}
+            </div>
+            <div className="rows">
+              <div><span>Translation</span><b>{take.transPct === null ? "-" : `${take.transPct.toFixed(1)}%`}</b></div>
+              <div><span>Held</span><b>{held} of {take.segments.length || run.shot.segments.length}</b></div>
+              <div><span>At frame {frame}</span><b>{here ? deg(here.deg) : "-"}</b></div>
+              {take.move && <div><span>Move</span><span className="mark mark--advisory">{take.move}</span></div>}
+            </div>
+            {take.repair && <p className="hint">Segment {take.repair.segment + 1} regenerated from frame {take.repair.fromFrame}: {deg(take.repair.before.segments[take.repair.segment]?.rotDeg)} to {deg(take.segments[take.repair.segment]?.rotDeg)}</p>}
+            <RepairButton t={take} run={run} repairCredits={repairCredits} onRepair={onRepair} />
+          </section>
+
+          <section className="side-box paths-box-wrap">
+            <h2 className="titlebar">Camera paths</h2>
+            <div className="legend"><i className="dot a" />authored <i className="dot r" />recovered</div>
+            <div className="paths-box screen">
+              <div className="stage">
+                <span className="pip-label">frame {frame}</span>
+                <Viewport doc={doc} frame={frame} poses={authored} recovered={recovered} gizmo="position" showPip readOnly framing={framing} onGizmoCommit={() => {}} onAssetError={() => {}} />
+              </div>
+            </div>
+          </section>
+
+          <section className="side-box">
+            <h2 className="titlebar">Export</h2>
+            <div className="downloads">
+              <UpscaleButton t={take} run={run} credits={upscaleCredits} onUpscale={onUpscale} />
+              {take.hasVideo ? <a className="btn" href={videoDownloadUrl(run.id, take.seed)} download={`${base}.mp4`}>Download video</a> : <span className="muted">{run.live ? "no video file for this take" : "dry run: no video to export"}</span>}
+              {take.hasPoses && <a className="btn" href={posesUrl(run.id, take.seed)} download={`${base}.poses.json`}>Download poses</a>}
+            </div>
+          </section>
+        </aside>
+      </div>
     </div>
   );
 }

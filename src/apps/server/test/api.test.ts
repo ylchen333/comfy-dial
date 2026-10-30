@@ -47,7 +47,7 @@ describe("studio API", () => {
     expect(v.takes.some((t) => t.pass)).toBe(true);
     const withPoses = v.takes.find((t) => t.hasPoses)!;
     const poses = (await (await fetch(`${base}/api/runs/${v.id}/takes/${withPoses.seed}/poses`)).json()) as { schema: string };
-    expect(poses.schema).toBe("comfy-osh/poses/1");
+    expect(poses.schema).toBe("comfy-dial/poses/1");
   });
 
   it("repair: regenerates the drifted segment, re-ranks, serves the patched poses, and refuses a second repair", async () => {
@@ -120,7 +120,7 @@ describe("studio API", () => {
   it("lists bundled scenes and serves them; refuses names outside scenes/ and uploads/", async () => {
     const { base } = await boot();
     const list = (await (await fetch(`${base}/api/scenes`)).json()) as { id: string; asset: string }[];
-    expect(list.map((s) => s.asset)).toEqual(["scenes/courtyard.glb", "scenes/street.glb"]);
+    expect(list.map((s) => s.asset)).toEqual(["scenes/courtyard.glb", "scenes/huangshan.glb", "scenes/street.glb"]);
     const glb = await fetch(`${base}/api/assets/scenes/courtyard.glb`);
     expect(glb.status).toBe(200);
     expect(glb.headers.get("content-type")).toBe("model/gltf-binary");

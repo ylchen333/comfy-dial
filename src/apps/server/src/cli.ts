@@ -4,7 +4,7 @@ import { existsSync, readFileSync, rmSync } from "node:fs";
 import { dirname, isAbsolute, join, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 import { parseArgs } from "node:util";
-import { ControlPacket, Shot } from "@comfy-osh/contracts";
+import { ControlPacket, Shot } from "@comfy-dial/contracts";
 import { CliComfyClient } from "./cli-client.ts";
 import type { ComfyClient } from "./client.ts";
 import { loadEnvFile } from "./env.ts";
@@ -55,7 +55,7 @@ async function main() {
   const guide = a.guide
     ? { path: resolve(CWD, a.guide), near: 1, far: 100 }
     : await ensureGuide(shot, resolve(here, "..", ".runs", "guides")).catch((e) => die(`no depth guide for ${shot.id} and rendering one failed: ${(e as Error).message}`));
-  if (!existsSync(guide!.path)) die(`guide missing: ${guide!.path}\nrun: pnpm --filter @comfy-osh/rig-core render:golden (needs ffmpeg)`);
+  if (!existsSync(guide!.path)) die(`guide missing: ${guide!.path}\nrun: pnpm --filter @comfy-dial/rig-core render:golden (needs ffmpeg)`);
   if (Number(a.strength) === 0 && !a["allow-unguided"]) die("--strength 0 gives an unguided take (negative control); add --allow-unguided to confirm");
   const packet = ControlPacket.parse({
     shotId: shot.id,

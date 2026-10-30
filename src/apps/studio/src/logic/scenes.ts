@@ -1,6 +1,6 @@
 // Scene choices: the primitive blocking set, the bundled glTF sets, and glTF/GLB models added by the user.
-import type { Shot } from "@comfy-osh/contracts";
-import type { Vec3 } from "@comfy-osh/rig-core";
+import type { Shot } from "@comfy-dial/contracts";
+import type { Vec3 } from "@comfy-dial/rig-core";
 import { DEFAULT_SCENE_NODES } from "./keys.ts";
 import type { StudioDoc } from "./types.ts";
 
@@ -21,7 +21,7 @@ export function bundledScene(asset: string): Shot["scene"] {
 
 /** Which scene the doc shows: "blocking", a bundled id, or "custom" when models were added or the nodes were changed. The subject node is judged separately (see withSubject). */
 export function sceneIdOf(doc: Pick<StudioDoc, "scene">, listings: readonly SceneListing[]): string {
-  const nodes = doc.scene.nodes.filter((n) => n.id !== "subject");
+  const nodes = doc.scene.nodes.filter((n) => n.id !== "subject" && !n.asset.startsWith("actors/")); // bundled actor props don't change which set this is
   if (nodes.every((n) => !isModelAsset(n.asset))) return BLOCKING_SCENE_ID;
   const set = nodes.find((n) => n.id === "set");
   const hit = listings.find((l) => l.asset === set?.asset);
@@ -84,4 +84,10 @@ export const assetUrl = (asset: string) => `/api/assets/${asset}`;
 
 export function blockingScene(): Shot["scene"] {
   return DEFAULT_SCENE_NODES;
+}
+
+/** Put a bundled actor in the scene as a prop beside the subject (feet on the ground at y = 0 for actors authored with their origin at the feet). */
+export function withActorProp(doc: StudioDoc, id: string, asset: string, position: Vec3): StudioDoc {
+  const node: Node = { id, asset, transform: { position, quaternion: IDENTITY.quaternion, scale: [1, 1, 1] } };
+  return withScene(doc, { nodes: [...doc.scene.nodes.filter((n) => n.id !== id), node] });
 }

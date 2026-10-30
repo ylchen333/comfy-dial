@@ -1,4 +1,4 @@
-# SKILLS.md — Claude Code skills, plugins and MCP servers for Comfy-OSH
+# SKILLS.md — Claude Code skills, plugins and MCP servers for Comfy-Dial
 
 **Install block (copy-paste, in this order):**
 
@@ -105,9 +105,10 @@ Put them in `.claude/skills/` so every worktree agent shares them.
 | Skill | What it encodes | Build with |
 |---|---|---|
 | `camera-adherence-eval` | How to run the verifier: Sim(3)/Umeyama alignment, rot/trans/FOV error, per-segment scoring, the golden test, perturbation set (reversed, half amplitude, zoom-for-dolly, wrong orbit). "A change to `verifier/` is done only when the golden test passes." | `skill-creator` (with evals) |
-| `comfy-osh-graphs` | Which API-format graph does what, node IDs to `setInput`, frame rule (1+8k), `attention_strength`, SDK idempotency rules (save `{key → jobId}` before awaiting) | `skill-creator` |
+| `comfy-dial-graphs` | Which API-format graph does what, node IDs to `setInput`, frame rule (1+8k), `attention_strength`, SDK idempotency rules (save `{key → jobId}` before awaiting) | `skill-creator` |
 | `licence-guard` | Allowed: LTX-2.x Community, DA3 Small/Base (Apache-2.0), COLMAP/GLOMAP (BSD), TAPIR/BootsTAP (Apache-2.0). **Banned:** DA3 Large/Giant, CoTracker3, SpatialTracker v2 (CC BY-NC), `evo` (GPL), CozyClay code (AGPL), any partner node/API | `skill-creator` |
 | *(dev-use exception, Oct 29)* | **Optional actor generation only:** Hunyuan3D 2.1 shape model (local weights node chain, not the `Tencent*` partner nodes) and FLUX.1 schnell (Apache-2.0). Hunyuan3D's Tencent licence excludes the EU, UK and South Korea and bars using outputs to train other models, so generated meshes are never bundled or committed (they live in the runs folder). Tripo is a partner API: banned. | n/a |
+| *(allowed, Oct 29)* | **Optional take upscale:** SeedVR2 3B (ByteDance-Seed, Apache-2.0) via the local `SeedVR2*` nodes (pack ComfyUI-SeedVR2_VideoUpscaler). Not the partner upscalers (Topaz, WaveSpeed FlashVSR, HitPaw, ByteDance vCube, BFL, Clarity). The score never uses the upscaled video. | n/a |
 
 ---
 
@@ -138,6 +139,7 @@ Put them in `.claude/skills/` so every worktree agent shares them.
 - ponytail's headline numbers (~53% less code, ~41% less time) are the author's benchmarks, not ours. Keep it only if it doesn't fight test-first work in `verifier/`.
 - Spark (World Labs) splat renderer has no skill; write one only if splats come back into scope.
 - ffmpeg/video-analysis community skills are unverified; use plain ffmpeg in scripts instead.
+- Tentative, after submission only: [ComfyUI-Sharp](https://github.com/PozzettiAndrea/ComfyUI-Sharp) (GPL-3.0 wrapper for Apple SHARP, photo to Gaussian splat). Use it only as an external pack the user installs; never vendor its code. Blocker: the SHARP weights are under the Apple ML Research Model License (read in full Oct 29): "exclusively for Research Purposes", which "does not include … product development or use in any commercial product or service"; revocable, delete on termination. Not on the §2 allowed list, so it is not in the install block or the demo. Revisit the licence reading before any use. Unchecked: output format, novel-view rendering, Mac/MPS and Cloud support, ml-sharp ACKNOWLEDGEMENTS.
 - Tentative: [peteromallet/VibeComfy](https://github.com/peteromallet/VibeComfy) (MIT, Python workflow authoring layer + CLI). Only the README was read (Oct 26); LTX IC-LoRA support and Cloud behaviour unchecked. Possible use: `doctor` / `nodes ensure` logic for the M3 local preflight. Not in the install block until used.
 
 **Quick Next Move:** Run step 2 of the install block, then ask the comfy-cloud MCP: `search_nodes "LTXAddVideoICLoRAGuide"`.

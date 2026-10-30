@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { sampleShot } from "@comfy-osh/rig-core";
+import { sampleShot } from "@comfy-dial/rig-core";
 import { exportShot } from "../src/logic/compile.ts";
 import { newDoc } from "../src/logic/keys.ts";
 import { applyPreset } from "../src/logic/presets.ts";

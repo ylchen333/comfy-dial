@@ -1,7 +1,7 @@
 {
   "contract": "Poses",
   "data": {
-    "schema": "comfy-osh/poses/1",
+    "schema": "comfy-dial/poses/1",
     "fps": 8,
     "image": { "width": 448, "height": 252 },
     "solve_ok": true,

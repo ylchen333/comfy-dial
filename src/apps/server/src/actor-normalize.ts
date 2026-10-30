@@ -1,7 +1,7 @@
 // Turns a raw image-to-3D mesh (Hunyuan3D output: arbitrary axes, scale and origin, stray fragments, 100k+ triangles)
 // into an actor the studio can use as the subject: one body, Y-up, a set height, soles 0.9 m below the origin
 // (so a subject at y = 0.9 stands on the ground), facing +Z, and a triangle count the depth renderer accepts.
-import { countTriangles, parseGltf, type Mesh, type Vec3 } from "@comfy-osh/rig-core";
+import { countTriangles, parseGltf, type Mesh, type Vec3 } from "@comfy-dial/rig-core";
 
 export interface NormalizeOptions {
   /** Height the figure is scaled to, metres. */
@@ -219,7 +219,7 @@ function writeGlb(s: Soup): Uint8Array {
   let lo = [Infinity, Infinity, Infinity], hi = [-Infinity, -Infinity, -Infinity];
   for (let i = 0; i < pos.length; i += 3) for (let a = 0; a < 3; a++) { lo[a] = Math.min(lo[a]!, pos[i + a]!); hi[a] = Math.max(hi[a]!, pos[i + a]!); }
   const json = {
-    asset: { version: "2.0", generator: "comfy-osh actor-normalize" },
+    asset: { version: "2.0", generator: "comfy-dial actor-normalize" },
     scene: 0, scenes: [{ nodes: [0] }], nodes: [{ mesh: 0, name: "actor" }],
     materials: [{ pbrMetallicRoughness: { baseColorFactor: [0.72, 0.72, 0.72, 1], metallicFactor: 0, roughnessFactor: 0.9 } }],
     meshes: [{ primitives: [{ attributes: { POSITION: 0, NORMAL: 1 }, indices: 2, material: 0 }] }],

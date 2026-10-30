@@ -1,8 +1,8 @@
 // Draw a recovered path in the authored world. DA3 poses live in their own frame with arbitrary scale, so (like the
 // verifier) express both paths in the frame-0 camera's axes, fit a single scale s >= 0, then map back through the
 // authored frame-0 camera. Rotation is never fitted, so a reversed or sideways move still looks reversed or sideways.
-import type { Poses } from "@comfy-osh/contracts";
-import { FPS, quatAngleDeg, quatToMat3, type Pose, type Quat, type Vec3 } from "@comfy-osh/rig-core";
+import type { Poses } from "@comfy-dial/contracts";
+import { FPS, quatAngleDeg, quatToMat3, type Pose, type Quat, type Vec3 } from "@comfy-dial/rig-core";
 
 // R is row-major camera-to-world. toCam = R^T v, toWorld = R v.
 const toCam = (R: number[], v: Vec3): Vec3 => [

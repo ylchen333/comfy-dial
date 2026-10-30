@@ -13,7 +13,7 @@ const LISTINGS: SceneListing[] = [
 
 const take = (o: Partial<TakeView>): TakeView => ({
   id: "t", seed: 1, rank: 1, pass: true, solveOk: true, composite: 0.3, rotDeg: 0.9, transPct: 2.1, fovDeg: 3,
-  badSegments: [], move: null, note: null, hasPoses: true, hasVideo: false, segments: [], repair: null, ...o,
+  badSegments: [], move: null, note: null, hasPoses: true, hasVideo: false, segments: [], repair: null, upscale: null, ...o,
 });
 
 describe("scene choices", () => {

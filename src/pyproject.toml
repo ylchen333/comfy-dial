@@ -1,5 +1,5 @@
 [project]
-name = "comfy-osh"
+name = "comfy-dial"
 version = "0.0.0"
 description = "Closed-loop camera director: verifier and contract mirrors"
 requires-python = ">=3.11,<3.12"

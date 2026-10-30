@@ -1,7 +1,7 @@
 // Frozen pass gate (SPEC section 6, docs/calibration.md, frozen Oct 22) and ranking.
 // Re-applied here from the raw errors in ScoreReport so ranking never depends on whichever
 // provisional constants the verifier build happens to carry. FOV is reported, never gated.
-import type { ScoreReport, Shot } from "@comfy-osh/contracts";
+import type { ScoreReport, Shot } from "@comfy-dial/contracts";
 
 export const FROZEN_GATES = { rotDeg: 2.75, transPct: 12, zoomRatioBand: 0.1 } as const;
 

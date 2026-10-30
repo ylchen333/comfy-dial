@@ -30,7 +30,7 @@ wheels = [
 ]
 
 [[package]]
-name = "comfy-osh"
+name = "comfy-dial"
 version = "0.0.0"
 source = { virtual = "." }
 dependencies = [

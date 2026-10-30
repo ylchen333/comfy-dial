@@ -1,4 +1,4 @@
-import type { Shot } from "@comfy-osh/contracts";
+import type { Shot } from "@comfy-dial/contracts";
 import type { Check } from "../logic/guardrails.ts";
 import type { RunListing, RunView, TakeView } from "../logic/runs.ts";
 import { ContactSheet } from "./ContactSheet.tsx";
@@ -28,8 +28,8 @@ export function GeneratePage({ shot, facts, checks, run, runList, onRun, onOpenR
         <span className="blurb">Make takes. This is the only page that spends credits.</span>
       </header>
       <div className="gen-body">
-        <section className="gen-side" aria-label="Shot and run controls">
-          <h2>Shot</h2>
+        <section className="gen-shot" aria-label="Shot">
+          <h2>The shot</h2>
           <dl className="facts">
             <dt>Name</dt><dd className="mono">{facts.id}</dd>
             <dt>Length</dt><dd>{facts.frames} frames · {facts.seconds.toFixed(2)} s</dd>
@@ -40,8 +40,8 @@ export function GeneratePage({ shot, facts, checks, run, runList, onRun, onOpenR
             {checks.length === 0 && <li className="none">No checks raised.</li>}
             {checks.map((c) => <li key={c.id} className={c.level}>{c.text}</li>)}
           </ul>
-          <RunPanel shot={shot} resolution={facts.resolution} run={run} onRun={onRun} onClearTake={() => {}} />
         </section>
+        <RunPanel shot={shot} resolution={facts.resolution} run={run} onRun={onRun} onClearTake={() => {}} />
         <section className="gen-main" aria-label="Results">
           {run && run.takes.length > 0 ? (
             <ContactSheet run={run} segments={segments} onRepair={onRepair} onReview={onReview} repairCredits={repairCredits} />
@@ -60,11 +60,11 @@ export function GeneratePage({ shot, facts, checks, run, runList, onRun, onOpenR
                   {runList.map((r) => (
                     <tr key={r.id} className={run?.id === r.id ? "cur" : ""}>
                       <td className="mono">{r.id}</td>
-                      <td>{r.live ? "Live" : "Dry"}</td>
+                      <td>{r.live ? <span className="tag-live">LIVE</span> : "Dry"}</td>
                       <td className="mono">{r.shotId}</td>
                       <td className="num">{r.takes}</td>
                       <td>{when(r.modified)}</td>
-                      <td className="act"><button type="button" onClick={() => onOpenRun(r.id)}>Open in Review</button></td>
+                      <td className="act"><button type="button" className="btn" onClick={() => onOpenRun(r.id)}>Open in Review</button></td>
                     </tr>
                   ))}
                 </tbody>

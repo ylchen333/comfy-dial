@@ -1,9 +1,9 @@
-import { Canvas, useFrame, useThree } from "@react-three/fiber";
+import { Canvas, useFrame, useThree, type ThreeEvent } from "@react-three/fiber";
 import { GizmoHelper, GizmoViewport, Grid, Line, OrbitControls, TransformControls } from "@react-three/drei";
 import { useEffect, useMemo, useRef, useState } from "react";
 import * as THREE from "three";
 import { GLTFLoader } from "three/examples/jsm/loaders/GLTFLoader.js";
-import { DEFAULT_DEPTH_NORM, type Pose, type Vec3 } from "@comfy-osh/rig-core";
+import { clipTime, DEFAULT_DEPTH_NORM, type Pose, type Vec3 } from "@comfy-dial/rig-core";
 import type { Aligned } from "../logic/align.ts";
 import { evalChannel } from "../logic/keys.ts";
 import { lensFrame, overscanFov } from "../logic/frameGuides.ts";
@@ -46,6 +46,12 @@ interface Props {
   onSelectKey?: (frame: number) => void;
   onKeyMove?: (frame: number, value: Vec3) => void;
   onGizmoCommit: (target: GizmoTarget, value: Vec3) => void;
+  /** The scene object being edited (clicked in the viewport or picked in the panel) and the tool used on it. */
+  selectedNode?: string | null;
+  transformMode?: "translate" | "rotate" | "scale";
+  onSelectNode?: (id: string | null) => void;
+  /** Called once when a drag of the gizmo ends, with the node's new transform. */
+  onNodeCommit?: (id: string, t: { position: Vec3; quaternion: [number, number, number, number]; scale: Vec3 }) => void;
   onAssetError: (msg: string) => void;
 }
 
@@ -73,15 +79,29 @@ const VIEWER_BUTTONS = { LEFT: THREE.MOUSE.ROTATE, MIDDLE: THREE.MOUSE.ROTATE, R
 const PERSP_FOV = 45, ORTHO_FOV = 1.5;
 
 /** A glTF/GLB node, loaded from the local server. The depth guide is rendered from the same file, so what you see is what the guide shows. */
-function GlbModel({ asset, transform, depthMat, onError }: { asset: string; transform: StudioDoc["scene"]["nodes"][number]["transform"]; depthMat: THREE.ShaderMaterial | null; onError: (msg: string) => void }) {
+function GlbModel({ asset, nodeId, transform, depthMat, onError, onPick, time }: { asset: string; nodeId: string; time: number; onPick?: (e: ThreeEvent<MouseEvent>) => void; transform: StudioDoc["scene"]["nodes"][number]["transform"]; depthMat: THREE.ShaderMaterial | null; onError: (msg: string) => void }) {
   const [obj, setObj] = useState<THREE.Object3D | null>(null);
+  const anim = useRef<{ mixer: THREE.AnimationMixer; start: number; period: number } | null>(null);
   const onErrorRef = useRef(onError);
   onErrorRef.current = onError;
   useEffect(() => {
     let dead = false;
     new GLTFLoader().load(
       assetUrl(asset),
-      (g) => { if (!dead) setObj(g.scene); },
+      (g) => {
+        if (dead) return;
+        anim.current = null;
+        const clip = g.animations[0];
+        if (clip && clip.tracks.length) {
+          // Same clock as the server's guide renderer (rig-core clipTime): the clip loops, starting at its first key.
+          let start = Infinity, end = -Infinity, dt = Infinity;
+          for (const tr of clip.tracks) { start = Math.min(start, tr.times[0]!); end = Math.max(end, tr.times[tr.times.length - 1]!); for (let i = 1; i < tr.times.length; i++) dt = Math.min(dt, tr.times[i]! - tr.times[i - 1]!); }
+          const mixer = new THREE.AnimationMixer(g.scene);
+          mixer.clipAction(clip).play();
+          anim.current = { mixer, start, period: end - start + (Number.isFinite(dt) ? dt : 0) };
+        }
+        setObj(g.scene);
+      },
       undefined,
       () => { if (!dead) onErrorRef.current(`could not load ${asset} (is \`pnpm serve\` running?)`); },
     );
@@ -95,30 +115,35 @@ function GlbModel({ asset, transform, depthMat, onError }: { asset: string; tran
       m.material = depthMat ?? (m.userData.solid as THREE.Material);
     });
   }, [obj, depthMat]);
+  useEffect(() => {
+    const a = anim.current;
+    if (a && obj) a.mixer.setTime(clipTime(a, time));
+  }, [obj, time]);
   if (!obj) return null;
-  return <primitive object={obj} position={transform.position as Vec3} quaternion={new THREE.Quaternion(...transform.quaternion)} scale={transform.scale as Vec3} />;
+  return <primitive object={obj} userData={{ nodeId }} onClick={onPick} position={transform.position as Vec3} quaternion={new THREE.Quaternion(...transform.quaternion)} scale={transform.scale as Vec3} />;
 }
 
-function SceneObjects({ doc, depthMat, onAssetError }: { doc: StudioDoc; depthMat: THREE.ShaderMaterial | null; onAssetError: (msg: string) => void }) {
+function SceneObjects({ doc, depthMat, onAssetError, onSelectNode, time }: { time: number; doc: StudioDoc; depthMat: THREE.ShaderMaterial | null; onAssetError: (msg: string) => void; onSelectNode?: ((id: string | null) => void) | undefined }) {
+  const pick = (id: string) => (e: ThreeEvent<MouseEvent>) => { if (!onSelectNode || e.delta > 4) return; e.stopPropagation(); onSelectNode(id); };
   return (
     <>
       {doc.scene.nodes.map((n) => {
         const t = n.transform;
-        if (isModelAsset(n.asset)) return <GlbModel key={`${n.id}:${n.asset}`} asset={n.asset} transform={t} depthMat={depthMat} onError={onAssetError} />;
+        if (isModelAsset(n.asset)) return <GlbModel key={`${n.id}:${n.asset}`} asset={n.asset} nodeId={n.id} transform={t} depthMat={depthMat} onError={onAssetError} onPick={pick(n.id)} time={time} />;
         const kind = n.asset.replace("primitive:", "");
         if (kind === "plane") return null; // the ground is drawn by the editor grid
         const common = { position: t.position as Vec3, quaternion: new THREE.Quaternion(...t.quaternion) };
         if (n.id === "subject") {
           const r = t.scale[0] / 2;
           return (
-            <mesh key={n.id} {...common} castShadow>
+            <mesh key={n.id} {...common} userData={{ nodeId: n.id }} onClick={pick(n.id)} castShadow>
               <capsuleGeometry args={[r, Math.max(0.01, t.scale[1] - 2 * r), 8, 16]} />
               {depthMat ? <primitive object={depthMat} attach="material" /> : <meshStandardMaterial color="#e8903f" />}
             </mesh>
           );
         }
         return (
-          <mesh key={n.id} {...common} scale={t.scale as Vec3} castShadow>
+          <mesh key={n.id} {...common} userData={{ nodeId: n.id }} onClick={pick(n.id)} scale={t.scale as Vec3} castShadow>
             {kind === "cylinder" ? <cylinderGeometry args={[0.5, 0.5, 1, 24]} /> : <boxGeometry args={[1, 1, 1]} />}
             {depthMat ? <primitive object={depthMat} attach="material" /> : <meshStandardMaterial color="#5a80d9" />}
           </mesh>
@@ -130,6 +155,35 @@ function SceneObjects({ doc, depthMat, onAssetError }: { doc: StudioDoc; depthMa
           {depthMat ? <primitive object={depthMat} attach="material" /> : <meshStandardMaterial color="#6b8c61" />}
         </mesh>
       )}
+    </>
+  );
+}
+
+/** Outline and move/rotate/scale handles on the selected scene object. A drag is previewed live and committed once on release. */
+function NodeGizmo({ id, mode, snap, onCommit }: { id: string; mode: "translate" | "rotate" | "scale"; snap: boolean; onCommit: NonNullable<Props["onNodeCommit"]> }) {
+  const scene = useThree((s) => s.scene);
+  const [target, setTarget] = useState<THREE.Object3D | null>(null);
+  const box = useMemo(() => new THREE.BoxHelper(new THREE.Object3D(), 0xffd23f), []);
+  useEffect(() => { setTarget(null); }, [id]);
+  useFrame(() => {
+    if (!target || !target.parent) {
+      let hit: THREE.Object3D | null = null;
+      scene.traverse((o) => { if (!hit && o.userData.nodeId === id) hit = o; });
+      if (hit && hit !== target) setTarget(hit);
+      return;
+    }
+    box.setFromObject(target);
+  });
+  useEffect(() => () => { box.geometry.dispose(); (box.material as THREE.Material).dispose(); }, [box]);
+  if (!target) return null;
+  return (
+    <>
+      <primitive object={box} />
+      <TransformControls
+        object={target} mode={mode} size={0.8}
+        translationSnap={snap ? 0.25 : null} rotationSnap={snap ? Math.PI / 12 : null} scaleSnap={snap ? 0.1 : null}
+        onMouseUp={() => onCommit(id, { position: target.position.toArray() as Vec3, quaternion: target.quaternion.toArray() as [number, number, number, number], scale: target.scale.toArray() as Vec3 })}
+      />
     </>
   );
 }
@@ -434,7 +488,7 @@ function Gizmos({ doc, frame, pose, gizmo, snap, onGizmoCommit }: Pick<Props, "d
   );
 }
 
-export function Viewport({ doc, frame, poses, recovered, gizmo, showPip, readOnly, lens, viewCmd, framing, overlays = DEFAULT_OVERLAYS, ortho = false, shading = "solid", onUserOrbit, onViewLabel, grab = null, onGrabPreview, onGrabEnd, snap, selectedKeyFrame, onSelectKey, onKeyMove, onGizmoCommit, onAssetError }: Props) {
+export function Viewport({ doc, frame, poses, recovered, gizmo, showPip, readOnly, lens, viewCmd, framing, overlays = DEFAULT_OVERLAYS, ortho = false, shading = "solid", onUserOrbit, onViewLabel, grab = null, onGrabPreview, onGrabEnd, snap, selectedKeyFrame, onSelectKey, onKeyMove, onGizmoCommit, selectedNode = null, transformMode = "translate", onSelectNode, onNodeCommit, onAssetError }: Props) {
   const helpers = useRef<THREE.Group>(null);
   const pose = poses[Math.min(frame, poses.length - 1)]!;
   const aspect = doc.resolution.width / doc.resolution.height;
@@ -455,11 +509,11 @@ export function Viewport({ doc, frame, poses, recovered, gizmo, showPip, readOnl
     ? (new THREE.Vector3(0, 0, -aimDist).applyQuaternion(new THREE.Quaternion(...ghost.quaternion)).add(new THREE.Vector3(...ghost.position)).toArray() as Vec3)
     : [0, 0, 0];
   return (
-    <Canvas camera={{ position: [9, 7, 11], fov: PERSP_FOV, near: 0.1, far: 500 }} gl={{ antialias: true }} style={{ background: "#0e0e0e" }}>
+    <Canvas camera={{ position: [9, 7, 11], fov: PERSP_FOV, near: 0.1, far: 500 }} gl={{ antialias: true }} style={{ background: "#0e0e0e" }} onPointerMissed={(e) => { if (!readOnly && e.button === 0) onSelectNode?.(null); }}>
       <color attach="background" args={[shading === "depth" ? "#000000" : "#0e0e0e"]} />
       <ambientLight intensity={0.7} />
       <directionalLight position={[6, 10, 4]} intensity={1.2} />
-      <SceneObjects doc={doc} depthMat={depthMat} onAssetError={onAssetError} />
+      <SceneObjects time={pose.t} doc={doc} depthMat={depthMat} onAssetError={onAssetError} onSelectNode={readOnly ? undefined : onSelectNode} />
       <ViewCommands cmd={viewCmd} framing={framing} />
       <ProjectionSwitch ortho={ortho} lens={Boolean(lens)} />
       <Navigation onUserOrbit={onUserOrbit} />
@@ -488,6 +542,7 @@ export function Viewport({ doc, frame, poses, recovered, gizmo, showPip, readOnl
         {recovered && recovered.path.length > 1 && <Line points={recovered.path} color="#3fd2ff" lineWidth={2} />}
         {ghost && <FrustumGizmo pose={ghost} aspect={aspect} color="#3fd2ff" />}
         {ghost && <Line points={[ghost.position, ghostAim]} color="#3fd2ff" lineWidth={2} />}
+        {!readOnly && selectedNode && onNodeCommit && <NodeGizmo key={selectedNode} id={selectedNode} mode={transformMode} snap={Boolean(snap)} onCommit={onNodeCommit} />}
         {!readOnly && <Gizmos doc={doc} frame={frame} pose={pose} gizmo={gizmo} snap={Boolean(snap)} onGizmoCommit={onGizmoCommit} />}
       </group>
       <OrbitControls makeDefault enabled={!lens && !grab} enableDamping={false} screenSpacePanning mouseButtons={readOnly ? VIEWER_BUTTONS : MOUSE_BUTTONS} target={[0, 1, 0]} />

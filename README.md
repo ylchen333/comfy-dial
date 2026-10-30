@@ -1,4 +1,4 @@
-# Comfy-OSH: the camera move that checks itself
+# Comfy-Dial: the camera move that checks itself
 
 Draw a camera move in 3D. An open-weights video model (LTX-2.5) generates several takes of it. A second model (Depth Anything 3) recovers the camera each take actually used, a verifier scores how closely it followed your move, and only the segment that drifted is regenerated.
 
@@ -32,10 +32,14 @@ Two terminals, both from `src/`:
 
 ```bash
 pnpm serve                              # API on 127.0.0.1:5198
-pnpm --filter @comfy-osh/studio dev     # studio at http://localhost:5173 (Vite prints the port)
+pnpm --filter @comfy-dial/studio dev     # studio at http://localhost:5173 (Vite prints the port)
 ```
 
 The studio works with no key: **Run dry** uses synthetic poses and costs nothing, so you can learn the interface first.
+
+**Demo default.** The studio opens on the Huangshan set (`scenes/huangshan.glb`, built by `src/tools/blender/make_huangshan_scene.py`) with the subject on the stairs. If this machine has a generated actor whose description contains "swordsman" (the ink-robed swordsman), it is the subject; otherwise the mannequin stands in. A bundled dancing baby (`actors/dancing_baby.glb`, about 0.85 m, feet at the origin) stands beside him on the same step and dances in the depth guide, and the default prompt mentions both.
+
+**Animated glTF.** A glTF with a node animation (translation, rotation and scale tracks on rigid parts, linear keys, no skins) is posed per frame in the depth guide: the first clip loops from its first key, at the shot's time (`rig-core` `clipTime`). The studio viewport and the lens preview use the same clock. No contract change: any animated asset in a shot node plays automatically. Skinned meshes, morph targets and non-linear interpolation are not supported. Generated actors are never bundled, so a fresh checkout shows the mannequin until you generate one.
 
 ## A 5-minute walkthrough
 
@@ -55,6 +59,8 @@ The **Next** button and the numbered tabs move between pages. `/?run=<id>` opens
 - `D` or `Z` toggles Solid and Depth shading. `N` opens the Item panel (the shot camera's numbers; typing one keys it at this frame). `G` grabs the selected position key (`X`/`Y`/`Z` constrain, click or Enter confirms, Esc cancels).
 - Timeline: Left/Right step one frame, Shift+Left/Right jump to the ends, Up/Down jump between keys, Space plays. Shortcuts are ignored while you type in a text box.
 
+**Scene objects.** Under Scene, pick an object (the list, or click it in the viewport) to type its Location, Rotation (degrees) and Scale, or drag the handles. `W` Move, `E` Rotate, `R` Scale, `Esc` deselects, `Delete` (or Backspace) removes the selected object (the subject and the ground can't be removed), and Snap rounds a drag. Subject, props and imported models all work, each edit is one Undo step, and the depth guide uses the same numbers.
+
 **Generate** holds the prompt, the optional *Avoid* text, take count, guidance strength and earlier runs.
 
 **Review** has the contact sheet of ranked takes, the video, the authored-versus-recovered path in 3D, and exports.
@@ -66,6 +72,7 @@ The **Next** button and the numbered tabs move between pages. `/?run=<id>` opens
 | **Match a camera from a video** | Author, left panel | about 9 credits | Recovers a clip's camera and applies it as editable keys (Undo restores yours). One video cannot give the scale, so you enter the travel in metres. Use footage you made or may use. |
 | **Generate an actor** | Author, Scene | about 12 credits (measured 4, 74 s) | Description or photo, then FLUX.1 schnell image, then Hunyuan3D 2.1 shape, then normalised to a 1.7 m, Y-up, +Z-facing figure of at most 80k triangles. Use the **Turn** field if the figure faces sideways. Stays on this machine. |
 | **Import a model** | Author, Scene | none | glTF/GLB triangle meshes, flat colour, at most 200k triangles. No textures, Draco or sparse accessors. |
+| **Upscale a take** | Review, header | about 20 (unmeasured guess) | SeedVR2 3B (Apache-2.0) makes a 1536x1024 copy of the 768x512 take, with **Open** (new window) and **Download**. The camera score still describes the original take. |
 | **Repair a segment** | Review | about 13 (8 measured) | See above. |
 
 Every paid action asks for a confirmation of the credit estimate first. Local servers are free.
@@ -85,7 +92,7 @@ All from `src/`.
 | `pnpm preflight` | List missing node packs and models on your ComfyUI; spends nothing |
 | `pnpm replay --graph <saved graph> --set node.input=value --out <dir> --yes` | Re-run one saved take with one setting changed, for same-seed comparisons |
 | `uv run python -m verifier flicker take.mp4 --seams 56,112` | Brightness jitter, worst frame and seam spikes |
-| `pnpm --filter @comfy-osh/contracts gen:fixtures` | Regenerate the golden shot fixtures |
+| `pnpm --filter @comfy-dial/contracts gen:fixtures` | Regenerate the golden shot fixtures |
 
 ## Costs
 
@@ -124,6 +131,7 @@ Same code; only `src/.env` changes. No API key, no partner nodes.
 | `ltx-2.5-video-vae-bf16.safetensors`, `ltx-2.5-audio-vae-bf16.safetensors` | `vae` |
 | `da3_base.safetensors` (Small also allowed; never Large or Giant) | `geometry_estimation` |
 | `hunyuan_3d_v2.1.safetensors`, `flux1-schnell-fp8.safetensors` (only for actor generation) | `checkpoints` |
+| `seedvr2_ema_3b_fp16.safetensors`, `ema_vae_fp16.safetensors` (only for upscaling; needs the SeedVR2 node pack) | `SEEDVR2` |
 
 4. Run `pnpm preflight`; exit code 0 means ready.
 5. Run `pnpm loop ... --live` or use the studio; "live" then means your server.
@@ -139,14 +147,15 @@ Preflight is tested against fixtures only, and the actor graphs are not yet in i
 | Depth Anything 3 Small and Base | Apache-2.0 | Camera recovery |
 | COLMAP / GLOMAP, TAPIR | BSD / Apache-2.0 | Allowed, optional |
 | FLUX.1 schnell | Apache-2.0 | Optional actor reference image |
+| SeedVR2 3B | Apache-2.0 | Optional upscale of a finished take |
 | Hunyuan3D 2.1 | Tencent community licence (excludes EU, UK, South Korea) | Optional actor generation; outputs never bundled |
 | Not used | DA3 Large/Giant, CoTracker3, SpatialTracker v2 (non-commercial), `evo` (GPL), CozyClay (AGPL), any partner node or API | |
 
-Reference footage for any demo must be your own or CC0. Bundled sets and mannequins are generated from code (`pnpm --filter @comfy-osh/rig-core build:scenes`, `src/tools/blender/make_actor.py`), so they carry no third-party assets.
+Reference footage for any demo must be your own or CC0. Bundled sets and mannequins are generated from code (`pnpm --filter @comfy-dial/rig-core build:scenes`, `src/tools/blender/make_actor.py`), so they carry no third-party assets.
 
 ## Known limits
 
-- The depth guide carries shape, not identity: your prompt says who the person is. The mannequin and the generated actors are static poses; animated actors are not supported yet.
+- The depth guide carries shape, not identity: your prompt says who the person is. The mannequin and the generated actors are static poses; animated actors are limited to rigid-part node animation (see Animated glTF above).
 - One reference video gives no true scale and an unreliable zoom.
 - DA3 assumes a static scene, so a moving subject adds noise to the recovered camera.
 - Some flicker remains (an 8-frame pulse and texture shimmer).
@@ -154,6 +163,8 @@ Reference footage for any demo must be your own or CC0. Bundled sets and mannequ
 - No end-to-end browser test yet, and no self-hosted run yet.
 
 ## Layout
+
+The project was called Comfy-Dial until Oct 29. The code keeps the old name in internal identifiers (the `@comfy-dial/*` package scope, schema ids such as `comfy-dial/poses/1`, the `ComfyDial_SaveCameraPosesJSON` node, the `comfy-dial` folder), because changing them would invalidate saved runs and fixtures.
 
 ```
 SPEC.md  SKILLS.md  CLAUDE.md  LICENSE  docs/

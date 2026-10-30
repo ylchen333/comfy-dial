@@ -2,7 +2,7 @@
 // Reuses the loop's pieces (same graph, key store, poses converter), so it measures the same way the verifier does.
 import { mkdirSync, readFileSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
-import { Poses } from "@comfy-osh/contracts";
+import { Poses } from "@comfy-dial/contracts";
 import { isTransientError, type ComfyClient } from "./client.ts";
 import { buildPoseGraph } from "./graph.ts";
 import { REFERENCE_SAMPLES } from "./safety.ts";
@@ -47,7 +47,7 @@ export async function recoverCamera(o: {
     // The sampled frames are evenly spaced, so index i sits at i * duration / (frames - 1): fps = (frames - 1) / duration.
     await o.tools.buildPoses(ext, intr, out, (frames - 1) / durationSec, 1);
   } catch {
-    writeFileSync(out, JSON.stringify({ schema: "comfy-osh/poses/1", fps: 25, image: { width: 768, height: 512 }, solve_ok: false, frames: [] }));
+    writeFileSync(out, JSON.stringify({ schema: "comfy-dial/poses/1", fps: 25, image: { width: 768, height: 512 }, solve_ok: false, frames: [] }));
   }
   return { poses: Poses.parse(JSON.parse(readFileSync(out, "utf8"))), durationSec, sampled: frames };
 }

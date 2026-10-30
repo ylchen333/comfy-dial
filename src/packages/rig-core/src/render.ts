@@ -2,7 +2,7 @@
 // Produces an RGB frame and a depth frame. Depth is view-space z (distance along the camera
 // forward axis), normalized with a FIXED near/far for the whole clip, never per frame:
 //   v = clamp(1 - ln(z / near) / ln(far / near), 0, 1)   (near -> 1 white, far/sky -> 0 black)
-import type { Shot } from "@comfy-osh/contracts";
+import type { Shot } from "@comfy-dial/contracts";
 import { quatToMat3, type Quat, type Vec3 } from "./math.ts";
 import { vFovDegToFocalPx } from "./fov.ts";
 import type { Pose } from "./sampler.ts";
@@ -45,13 +45,21 @@ const COLORS: Record<string, Vec3> = {
   pillar_r: [0.35, 0.5, 0.85],
 };
 
-export function buildPrims(scene: Shot["scene"], meshes?: MeshResolver): Prim[] {
+/** Nodes whose asset has a node animation (they are re-posed for every frame). */
+export function animatedNodes(scene: Shot["scene"], meshes?: MeshResolver): number[] {
+  if (!meshes?.animated) return [];
+  return scene.nodes.flatMap((n, i) => (!isPrimitiveAsset(n.asset) && meshes.animated!(n.asset)?.animation ? [i] : []));
+}
+
+/** `t` is the shot time in seconds; it poses animated glTF nodes (looped clip), and is ignored for everything else. */
+export function buildPrims(scene: Shot["scene"], meshes?: MeshResolver, t?: number): Prim[] {
   return scene.nodes.map((n) => {
     const R = quatToMat3(n.transform.quaternion as Quat);
     const s = n.transform.scale;
     if (!isPrimitiveAsset(n.asset)) {
       if (!meshes) throw new Error(`asset ${n.asset} needs a mesh resolver (glTF/GLB nodes cannot be rendered without one)`);
-      const bvh = buildBvh(meshes(n.asset), n.transform.position as Vec3, R, s as Vec3);
+      const model = t === undefined ? null : meshes.animated?.(n.asset);
+      const bvh = buildBvh(model?.animation ? model.meshesAt(t) : meshes(n.asset), n.transform.position as Vec3, R, s as Vec3);
       return { kind: "mesh", id: n.id, A: [1, 0, 0, 0, 1, 0, 0, 0, 1], o: [0, 0, 0], R, invS: [1, 1, 1], pos: [0, 0, 0], color: [0.7, 0.7, 0.7], bvh };
     }
     const kind = n.asset.replace("primitive:", "") as Kind;
@@ -269,6 +277,14 @@ export function* renderClip(
   norm: DepthNormalization = DEFAULT_DEPTH_NORM,
   meshes?: MeshResolver,
 ): Generator<Frame> {
-  const prims = buildPrims(shot.scene, meshes);
-  for (const pose of poses) yield renderFrame(shot, pose, norm, prims);
+  const moving = animatedNodes(shot.scene, meshes);
+  let prims = buildPrims(shot.scene, meshes, poses[0]?.t);
+  for (const pose of poses) {
+    // A static scene is built once; animated actors are re-posed (and their triangles re-sorted into a BVH) for each frame.
+    if (moving.length) {
+      const fresh = buildPrims({ nodes: moving.map((i) => shot.scene.nodes[i]!) }, meshes, pose.t);
+      prims = prims.map((p, i) => (moving.includes(i) ? fresh[moving.indexOf(i)]! : p));
+    }
+    yield renderFrame(shot, pose, norm, prims);
+  }
 }

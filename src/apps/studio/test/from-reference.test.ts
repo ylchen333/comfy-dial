@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
-import type { Poses } from "@comfy-osh/contracts";
-import { quatToMat3, rotate, sampleShot, type Quat, type Vec3 } from "@comfy-osh/rig-core";
+import type { Poses } from "@comfy-dial/contracts";
+import { quatToMat3, rotate, sampleShot, type Quat, type Vec3 } from "@comfy-dial/rig-core";
 import { exportShot } from "../src/logic/compile.ts";
 import { evalChannel, newDoc } from "../src/logic/keys.ts";
 import { applyReference, keysFromReference, simplify, type RefKeys } from "../src/logic/fromReference.ts";
@@ -24,7 +24,7 @@ function solveOf(docIn: ReturnType<typeof newDoc>, k: number, secondsPerFrame = 
     quaternion: qmul(qconj(p0.quaternion as Quat), p.quaternion as Quat),
     fov_v_deg: p.fov_v_deg,
   }));
-  return { schema: "comfy-osh/poses/1", fps: 25, image: { width: 768, height: 512 }, solve_ok: true, frames } as unknown as Poses;
+  return { schema: "comfy-dial/poses/1", fps: 25, image: { width: 768, height: 512 }, solve_ok: true, frames } as unknown as Poses;
 }
 const pathLen = (ps: readonly { position: Vec3 }[]) => ps.slice(1).reduce((s, p, i) => s + dist(p.position, ps[i]!.position), 0);
 

@@ -4,7 +4,7 @@ import { copyFileSync } from "node:fs";
 import { dirname, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 import { promisify } from "node:util";
-import { ScoreReport } from "@comfy-osh/contracts";
+import { ScoreReport } from "@comfy-dial/contracts";
 
 const exec = promisify(execFile);
 
@@ -22,7 +22,7 @@ export interface Tools {
   stitch(head: string, headFrames: number, tail: string, dst: string, fps: number): Promise<void>;
   /** Pick `count` evenly spaced frames of a reference video into a small clip DA3 can solve; returns the source duration. */
   sample(src: string, dst: string, count: number): Promise<{ durationSec: number; frames: number }>;
-  /** DA3 extrinsics/intrinsics text -> comfy-osh/poses/1 JSON (comfy_nodes/poses.py). */
+  /** DA3 extrinsics/intrinsics text -> comfy-dial/poses/1 JSON (comfy_nodes/poses.py). */
   buildPoses(extrinsics: string, intrinsics: string, out: string, fps: number, stride: number): Promise<void>;
   /** python -m verifier score. */
   score(shotPath: string, posesPath: string, candidateId: string): Promise<ScoreReport>;

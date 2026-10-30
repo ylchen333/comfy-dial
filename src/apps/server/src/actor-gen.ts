@@ -21,7 +21,7 @@ export const actorImagePrompt = (description: string) =>
 
 const seedOf = (text: string) => parseInt(createHash("sha1").update(text).digest("hex").slice(0, 7), 16);
 
-async function runJob(o: { client: ComfyClient; store: JobStore; graph: Graph; name: string; tag: string; maxRetries?: number }): Promise<string> {
+export async function runJob(o: { client: ComfyClient; store: JobStore; graph: Graph; name: string; tag: string; maxRetries?: number }): Promise<string> {
   const max = o.maxRetries ?? 2;
   for (let attempt = 0; ; attempt++) {
     const id = await submitOnce(o.store, o.client, idempotencyKey(o.tag, o.name, 0, o.graph, attempt), o.name, o.graph);

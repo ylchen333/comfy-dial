@@ -5,18 +5,20 @@ import { createServer, type IncomingMessage, type Server, type ServerResponse } 
 import { randomBytes } from "node:crypto";
 import { createReadStream, existsSync, mkdirSync, readFileSync, readdirSync, statSync, writeFileSync } from "node:fs";
 import { join, resolve } from "node:path";
-import { ControlPacket, Poses, ScoreReport, Shot } from "@comfy-osh/contracts";
+import { ControlPacket, Poses, ScoreReport, Shot } from "@comfy-dial/contracts";
 import { generateActor } from "./actor-gen.ts";
+import { upscaledFile, upscaleTake } from "./upscale.ts";
 import { AssetStore, MAX_UPLOAD_BYTES } from "./assets.ts";
 import { CliComfyClient, resolveTarget } from "./cli-client.ts";
 import type { ComfyClient } from "./client.ts";
 import { ensureGuide, type Guide } from "./guide.ts";
+import { createGate, GateError } from "./hosted.ts";
 import { MockClient } from "./mock-client.ts";
 import { repairSegment, runLoop, type TakeOutcome } from "./pipeline.ts";
 import { moveCheck, rankTakes, verdict, type Ranked } from "./rank.ts";
 import { cleanPrompt, DEFAULT_NEGATIVE, DEFAULT_PROMPT, MAX_NEGATIVE, MAX_PROMPT } from "./prompt.ts";
 import { recoverCamera } from "./reference.ts";
-import { ACTOR_CREDITS, estimateCredits, liveRefusal, MAX_ACTOR_IMAGE_BYTES, MAX_REFERENCE_BYTES, MAX_REFERENCE_SECONDS, REFERENCE_CREDITS, REPAIR_CREDITS } from "./safety.ts";
+import { ACTOR_CREDITS, UPSCALE_CREDITS, UPSCALE_HEIGHT, estimateCredits, liveRefusal, MAX_ACTOR_IMAGE_BYTES, MAX_REFERENCE_BYTES, MAX_REFERENCE_SECONDS, REFERENCE_CREDITS, REPAIR_CREDITS } from "./safety.ts";
 import { JobStore } from "./store.ts";
 import { copyDecimate, copyStitch, copyTrim, POSE_STRIDE, realTools, type Tools } from "./tools.ts";
 
@@ -31,6 +33,8 @@ export interface TakeView {
   segments: { rotDeg: number | null; pass: boolean }[];
   /** Set once a drifted segment of this take was regenerated; the numbers above are then the patched clip's. */
   repair: RepairView | null;
+  /** The optional high-resolution copy: running, failed, or done (the file exists). Null when never requested. */
+  upscale: { state: "running" | "done" | "error"; height: number; error?: string } | null;
 }
 export interface RepairView {
   segment: number; fromFrame: number; improved: boolean;
@@ -58,6 +62,8 @@ export interface ApiOptions {
   referenceClient?: (scratchDir: string) => ComfyClient;
   /** Test hook: replaces the client for actor generation. */
   actorClient?: (scratchDir: string) => ComfyClient;
+  /** Test hook: replaces the client for upscaling a take. */
+  upscaleClient?: (scratchDir: string) => ComfyClient;
 }
 
 class HttpError extends Error {
@@ -111,6 +117,8 @@ export function createApi(o: ApiOptions): Server {
   interface RunCtx {
     view: RunView; dir: string; videos: Map<number, string>; poses: Map<number, string>; outcomes: Map<number, TakeOutcome>;
     repairs: Map<number, RepairView>;
+    /** In-flight or failed upscales by seed; a finished one is just the file on disk. */
+    upscales: Map<number, { state: "running" | "error"; error?: string }>;
     loop: { shot: Shot; shotPath: string; packet: ControlPacket; guidePath: string; prompt: string; negative: string; store: JobStore; client: ComfyClient; tools: Tools } | null;
   }
   const runs = new Map<string, RunCtx>();
@@ -138,7 +146,7 @@ export function createApi(o: ApiOptions): Server {
         id, state: "done", live: mode === "live", n: outcomes.size, shotId: shot.id, estimate: 0,
         log: ["loaded from disk (view only)"], error: null, takes: [], repairing: null, prompt: null, negative: null, shot,
       };
-      const ctx: RunCtx = { view, dir, videos, poses, outcomes, repairs: new Map(), loop: null };
+      const ctx: RunCtx = { view, dir, videos, poses, outcomes, repairs: new Map(), upscales: new Map(), loop: null };
       void store;
       view.takes = rankTakes([...outcomes.values()]).map((x) => takeView(x, ctx));
       return ctx;
@@ -167,11 +175,17 @@ export function createApi(o: ApiOptions): Server {
     return out.sort((a, b) => b.modified - a.modified);
   }
 
+  const gate = createGate(o.env, o.runsDir);
+  /** Every credit-spending call goes through here: access code and budget in hosted mode, free otherwise. */
+  const charge = (req: IncomingMessage, credits: number) => {
+    try { gate.charge(req, credits); } catch (e) { if (e instanceof GateError) throw new HttpError(e.status, e.message); throw e; }
+  };
+
   let referenceBusy = false;
   let actorBusy = false;
   const busyLive = () => [...runs.values()].some((r) => r.view.live && (r.view.state === "running" || r.view.repairing));
 
-  async function startRun(body: Record<string, unknown>): Promise<RunView> {
+  async function startRun(req: IncomingMessage, body: Record<string, unknown>): Promise<RunView> {
     const parsed = Shot.safeParse(body.shot);
     if (!parsed.success) throw new HttpError(400, `invalid shot: ${parsed.error.issues.slice(0, 3).map((i) => `${i.path.join(".") || "(root)"}: ${i.message}`).join("; ")}`);
     const shot = parsed.data;
@@ -196,6 +210,7 @@ export function createApi(o: ApiOptions): Server {
         throw new HttpError(400, `live runs are only validated at ${CALIBRATED_RESOLUTION.width}x${CALIBRATED_RESOLUTION.height}; this shot is ${shot.resolution.width}x${shot.resolution.height}. Use the 3:2 preset or run a dry run.`);
       if (body.confirmCredits !== estimate) throw new HttpError(400, `live run not confirmed: send confirmCredits=${estimate}`);
       if (busyLive()) throw new HttpError(409, "a live run is already in progress");
+      charge(req, estimate);
     }
 
     const id = randomBytes(4).toString("hex");
@@ -205,7 +220,7 @@ export function createApi(o: ApiOptions): Server {
     writeFileSync(shotPath, JSON.stringify(shot, null, 2));
     const view: RunView = { id, state: "running", live, n, shotId: shot.id, estimate: live ? estimate : 0, log: [], error: null, takes: [], repairing: null, prompt, negative, shot };
     const videos = new Map<number, string>();
-    const ctx: RunCtx = { view, dir, videos, poses: new Map(), outcomes: new Map(), repairs: new Map(), loop: null };
+    const ctx: RunCtx = { view, dir, videos, poses: new Map(), outcomes: new Map(), repairs: new Map(), upscales: new Map(), loop: null };
     runs.set(id, ctx);
     const log = (m: string) => { view.log.push(m); if (view.log.length > 200) view.log.shift(); };
 
@@ -249,7 +264,7 @@ export function createApi(o: ApiOptions): Server {
   }
 
   /** Regenerate one drifted segment of a finished take, re-score the patched clip, re-rank the sheet. */
-  async function startRepair(run: RunCtx, seed: number, body: Record<string, unknown>): Promise<RunView> {
+  async function startRepair(req: IncomingMessage, run: RunCtx, seed: number, body: Record<string, unknown>): Promise<RunView> {
     const { view } = run;
     const loop = run.loop;
     const take = run.outcomes.get(seed);
@@ -264,6 +279,7 @@ export function createApi(o: ApiOptions): Server {
       if (!o.env.COMFY_API_KEY) throw new HttpError(400, "live repair needs COMFY_API_KEY in src/.env");
       if (body.confirmCredits !== REPAIR_CREDITS) throw new HttpError(400, `live repair not confirmed: send confirmCredits=${REPAIR_CREDITS}`);
       if (busyLive()) throw new HttpError(409, "a live job is already in progress");
+      charge(req, REPAIR_CREDITS);
     }
     view.repairing = { seed, segment };
     const log = (m: string) => { view.log.push(m); if (view.log.length > 200) view.log.shift(); };
@@ -295,6 +311,39 @@ export function createApi(o: ApiOptions): Server {
     return view;
   }
 
+  /** Make a high-resolution copy of a take with SeedVR2. Needs the take's real video (live runs); costs credits on Cloud, confirmed. */
+  function startUpscale(req: IncomingMessage, run: RunCtx, seed: number, url: URL): RunView {
+    const { view } = run;
+    const video = run.videos.get(seed);
+    if (view.state !== "done" || !run.outcomes.has(seed)) throw new HttpError(409, "the run must be finished and the take must exist");
+    if (!video || !existsSync(video)) throw new HttpError(400, "this take has no video to upscale (dry runs have none)");
+    if (run.upscales.get(seed)?.state === "running") throw new HttpError(409, "this take is already being upscaled");
+    if (existsSync(upscaledFile(join(run.dir, `s${seed}`)))) throw new HttpError(409, "this take is already upscaled");
+    const cloud = resolveTarget(o.env.COMFY_BASE_URL)[1] === "cloud";
+    if (cloud) {
+      if (!o.env.COMFY_API_KEY && !o.upscaleClient) throw new HttpError(400, "upscaling needs COMFY_API_KEY in src/.env (or a local COMFY_BASE_URL)");
+      if (Number(url.searchParams.get("confirmCredits")) !== UPSCALE_CREDITS) throw new HttpError(400, `upscale not confirmed: send confirmCredits=${UPSCALE_CREDITS}`);
+      if (busyLive()) throw new HttpError(409, "a live job is already in progress");
+    }
+    if ([...run.upscales.values()].some((u) => u.state === "running")) throw new HttpError(409, "another upscale is in progress");
+    if (cloud) charge(req, UPSCALE_CREDITS);
+    run.upscales.set(seed, { state: "running" });
+    const dir = join(run.dir, `s${seed}`);
+    void (async () => {
+      try {
+        const client = o.upscaleClient?.(dir) ?? new CliComfyClient({ baseUrl: o.env.COMFY_BASE_URL, apiKey: o.env.COMFY_API_KEY, scratchDir: join(dir, "graphs") });
+        await upscaleTake({ videoPath: video, outPath: upscaledFile(dir), client, store: new JobStore(join(dir, "upscale-jobs.json")), seed, fps: run.view.shot.fps });
+        run.upscales.delete(seed);
+      } catch (e) {
+        run.upscales.set(seed, { state: "error", error: (e as Error).message });
+      } finally {
+        view.takes = rankTakes([...run.outcomes.values()]).map((x) => takeView(x, run));
+      }
+    })();
+    view.takes = rankTakes([...run.outcomes.values()]).map((x) => takeView(x, run));
+    return view;
+  }
+
   /** Recover the camera of an uploaded reference video. Costs one DA3 job on Cloud (confirmed), nothing on a local server. */
   async function recoverReference(req: IncomingMessage, url: URL) {
     const cloud = resolveTarget(o.env.COMFY_BASE_URL)[1] === "cloud";
@@ -304,6 +353,7 @@ export function createApi(o: ApiOptions): Server {
       if (busyLive()) throw new HttpError(409, "a live job is already in progress");
     }
     if (referenceBusy) throw new HttpError(409, "another reference video is being solved");
+    if (cloud) charge(req, REFERENCE_CREDITS);
     referenceBusy = true;
     try {
       const bytes = await readRaw(req, MAX_REFERENCE_BYTES);
@@ -336,6 +386,7 @@ export function createApi(o: ApiOptions): Server {
       if (busyLive()) throw new HttpError(409, "a live job is already in progress");
     }
     if (actorBusy) throw new HttpError(409, "another actor is being generated");
+    if (cloud) charge(req, ACTOR_CREDITS);
     const isImage = /^image\//.test(req.headers["content-type"] ?? "");
     let description = "";
     let image: Buffer | null = null;
@@ -380,7 +431,7 @@ export function createApi(o: ApiOptions): Server {
     };
     const p = url.pathname;
     if (req.method === "GET" && p === "/api/health")
-      return send(200, { ok: true, liveAvailable: Boolean(o.env.COMFY_API_KEY), calibratedResolution: CALIBRATED_RESOLUTION, maxLiveTakes: 5, repairCredits: REPAIR_CREDITS, referenceCredits: REFERENCE_CREDITS, actorCredits: ACTOR_CREDITS, cloud: resolveTarget(o.env.COMFY_BASE_URL)[1] === "cloud" });
+      return send(200, { ok: true, liveAvailable: Boolean(o.env.COMFY_API_KEY), calibratedResolution: CALIBRATED_RESOLUTION, maxLiveTakes: 5, repairCredits: REPAIR_CREDITS, referenceCredits: REFERENCE_CREDITS, actorCredits: ACTOR_CREDITS, upscaleCredits: UPSCALE_CREDITS, cloud: resolveTarget(o.env.COMFY_BASE_URL)[1] === "cloud", gated: gate.gated, budgetLeft: gate.gated ? Math.max(0, gate.budget - gate.spent()) : null });
     if (req.method === "GET" && p === "/api/estimate") {
       const n = Number(url.searchParams.get("n") ?? 4);
       return send(200, { n, credits: Number.isInteger(n) && n > 0 ? estimateCredits(n) : null });
@@ -388,7 +439,7 @@ export function createApi(o: ApiOptions): Server {
     if (req.method === "POST" && p === "/api/runs") {
       const body = await readBody(req);
       if (typeof body !== "object" || body === null) throw new HttpError(400, "body must be an object");
-      return send(202, await startRun(body as Record<string, unknown>));
+      return send(202, await startRun(req, body as Record<string, unknown>));
     }
     if (req.method === "POST" && p === "/api/reference") return send(200, await recoverReference(req, url));
     if (req.method === "GET" && p === "/api/scenes") return send(200, assets.list());
@@ -423,13 +474,24 @@ export function createApi(o: ApiOptions): Server {
       if (!run) throw new HttpError(404, "no such run");
       const body = await readBody(req);
       if (typeof body !== "object" || body === null) throw new HttpError(400, "body must be an object");
-      return send(202, await startRepair(run, Number(rm[2]), body as Record<string, unknown>));
+      return send(202, await startRepair(req, run, Number(rm[2]), body as Record<string, unknown>));
     }
-    const m = /^\/api\/runs\/([0-9a-f]+)(?:\/takes\/(\d+)\/(poses|video))?$/.exec(p);
+    const um = /^\/api\/runs\/([0-9a-f]+)\/takes\/(\d+)\/upscale$/.exec(p);
+    if (req.method === "POST" && um) {
+      const run = runCtx(um[1]!);
+      if (!run) throw new HttpError(404, "no such run");
+      return send(202, startUpscale(req, run, Number(um[2]), url));
+    }
+    const m = /^\/api\/runs\/([0-9a-f]+)(?:\/takes\/(\d+)\/(poses|video|upscaled))?$/.exec(p);
     if (req.method === "GET" && m) {
       const run = runCtx(m[1]!);
       if (!run) throw new HttpError(404, "no such run");
       if (m[2] === undefined) return send(200, run.view);
+      if (m[3] === "upscaled") {
+        const file = upscaledFile(join(run.dir, `s${Number(m[2])}`));
+        if (!existsSync(file)) throw new HttpError(404, "this take has not been upscaled");
+        return serveVideo(req, res, file, url.searchParams.has("download") ? `${run.view.shotId}-s${m[2]}-${UPSCALE_HEIGHT}p.mp4` : null);
+      }
       if (m[3] === "video") {
         const file = run.videos.get(Number(m[2]));
         if (!file) throw new HttpError(404, "no video for that take");
@@ -477,7 +539,13 @@ function serveVideo(req: IncomingMessage, res: ServerResponse, file: string, att
   createReadStream(file, { start, end }).pipe(res);
 }
 
-function takeView(r: Ranked<TakeOutcome>, run: { dir: string; videos: Map<number, string>; poses: Map<number, string>; repairs: Map<number, RepairView> }): TakeView {
+function upscaleView(run: { dir: string; upscales: Map<number, { state: "running" | "error"; error?: string }> }, seed: number): TakeView["upscale"] {
+  const live = run.upscales.get(seed);
+  if (live) return { ...live, height: UPSCALE_HEIGHT };
+  return existsSync(upscaledFile(join(run.dir, `s${seed}`))) ? { state: "done", height: UPSCALE_HEIGHT } : null;
+}
+
+function takeView(r: Ranked<TakeOutcome>, run: { dir: string; videos: Map<number, string>; poses: Map<number, string>; repairs: Map<number, RepairView>; upscales: Map<number, { state: "running" | "error"; error?: string }> }): TakeView {
   const { dir, videos } = run;
   const t = r.item;
   const mv = t.move;
@@ -491,6 +559,7 @@ function takeView(r: Ranked<TakeOutcome>, run: { dir: string; videos: Map<number
     hasVideo: videos.has(t.seed),
     segments: t.report.perSegment.map((s) => ({ rotDeg: s.rotErrDeg, pass: s.pass })),
     repair: run.repairs.get(t.seed) ?? null,
+    upscale: upscaleView(run, t.seed),
   };
 }
 

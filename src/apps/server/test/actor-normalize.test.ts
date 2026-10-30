@@ -1,6 +1,6 @@
 import { readFileSync } from "node:fs";
 import { describe, expect, it } from "vitest";
-import { countTriangles, meshBounds, parseGltf, type Mesh } from "@comfy-osh/rig-core";
+import { countTriangles, meshBounds, parseGltf, type Mesh } from "@comfy-dial/rig-core";
 import { BUNDLED_ACTORS_DIR } from "../src/assets.ts";
 import { normalizeActor } from "../src/actor-normalize.ts";
 

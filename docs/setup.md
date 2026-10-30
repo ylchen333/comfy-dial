@@ -37,7 +37,7 @@ The golden clips are generated, not committed. Only each clip's `.meta.json` is 
 
 ```bash
 cd src
-pnpm --filter @comfy-osh/rig-core render:golden   # about 1 minute, needs ffmpeg
+pnpm --filter @comfy-dial/rig-core render:golden   # about 1 minute, needs ffmpeg
 ```
 
 Output goes to `src/tests/golden/clips/`.

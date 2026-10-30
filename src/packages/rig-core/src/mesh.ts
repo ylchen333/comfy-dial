@@ -10,7 +10,10 @@ export interface Mesh {
 }
 
 /** Resolves a Shot node `asset` (not `primitive:*`) to its meshes, or throws. */
-export type MeshResolver = (asset: string) => Mesh[];
+export type MeshResolver = ((asset: string) => Mesh[]) & {
+  /** The parsed model, when the file carries a node animation. The renderer then poses it at each frame's time. */
+  animated?: (asset: string) => GltfModel | null;
+};
 
 export const isPrimitiveAsset = (asset: string) => asset.startsWith("primitive:");
 
@@ -47,13 +50,54 @@ interface GltfJson {
   accessors?: { bufferView?: number; byteOffset?: number; componentType: number; count: number; type: string; sparse?: unknown }[];
   bufferViews?: { buffer: number; byteOffset?: number; byteLength: number; byteStride?: number }[];
   buffers?: { uri?: string; byteLength: number }[];
+  animations?: { channels: { sampler: number; target: { node?: number; path: string } }[]; samplers: { input: number; output: number; interpolation?: string }[] }[];
 }
 
-const COMPONENTS: Record<string, number> = { SCALAR: 1, VEC3: 3 };
+const COMPONENTS: Record<string, number> = { SCALAR: 1, VEC3: 3, VEC4: 4 };
 const srgbToLinear = (c: number) => (c <= 0.04045 ? c / 12.92 : ((c + 0.055) / 1.055) ** 2.4);
 
-/** Parse a GLB (or a .gltf with embedded base64 buffers). Node transforms are baked in; throws a readable error on anything unsupported. */
-export function parseGltf(bytes: Uint8Array): Mesh[] {
+/** A glTF whose node animation (translation, rotation, scale; rigid parts, no skins) can be sampled at any time. */
+export interface GltfModel {
+  /** Triangles in model space. `time` is seconds on the shot clock (looped); omit it for the rest pose / first frame. */
+  meshesAt(time?: number): Mesh[];
+  /** Set when the file has an animation: the clip is looped, starting at its first key. */
+  animation: { start: number; end: number; period: number } | null;
+}
+
+/** Map a shot time (s) to the clip time: the clip loops, starting at its first key. */
+export function clipTime(a: { start: number; period: number }, t: number): number {
+  const m = ((t % a.period) + a.period) % a.period;
+  return a.start + m;
+}
+
+type Track = { node: number; path: "translation" | "rotation" | "scale"; times: Float32Array; values: Float32Array };
+
+function slerp(a: number[], b: number[], u: number): number[] {
+  let [bx, by, bz, bw] = b as [number, number, number, number];
+  let d = a[0]! * bx + a[1]! * by + a[2]! * bz + a[3]! * bw;
+  if (d < 0) { d = -d; bx = -bx; by = -by; bz = -bz; bw = -bw; }
+  let ka: number, kb: number;
+  if (d > 0.9995) { ka = 1 - u; kb = u; }
+  else { const th = Math.acos(d), sn = Math.sin(th); ka = Math.sin((1 - u) * th) / sn; kb = Math.sin(u * th) / sn; }
+  const q = [ka * a[0]! + kb * bx, ka * a[1]! + kb * by, ka * a[2]! + kb * bz, ka * a[3]! + kb * bw];
+  const l = Math.hypot(q[0]!, q[1]!, q[2]!, q[3]!) || 1;
+  return q.map((c) => c / l);
+}
+
+function sampleTrack(tr: Track, t: number): number[] {
+  const n = tr.times.length, k = tr.path === "rotation" ? 4 : 3;
+  const at = (i: number) => Array.from(tr.values.subarray(i * k, i * k + k));
+  if (t <= tr.times[0]!) return at(0);
+  if (t >= tr.times[n - 1]!) return at(n - 1);
+  let i = 0;
+  while (i < n - 2 && tr.times[i + 1]! < t) i++;
+  const u = (t - tr.times[i]!) / (tr.times[i + 1]! - tr.times[i]!);
+  const a = at(i), b = at(i + 1);
+  return tr.path === "rotation" ? slerp(a, b, u) : a.map((v, c) => v + (b[c]! - v) * u);
+}
+
+/** Parse a GLB (or a .gltf with embedded base64 buffers). Throws a readable error on anything unsupported. */
+export function loadGltf(bytes: Uint8Array): GltfModel {
   const dv = new DataView(bytes.buffer, bytes.byteOffset, bytes.byteLength);
   let json: GltfJson;
   const bins: Uint8Array[] = [];
@@ -109,39 +153,86 @@ export function parseGltf(bytes: Uint8Array): Mesh[] {
     return { data: out, n: a.count };
   };
 
-  const meshes: Mesh[] = [];
-  const visit = (ni: number, parent: Mat4, depth: number) => {
-    if (depth > 64) throw new Error("glTF node hierarchy too deep");
-    const node = json.nodes?.[ni];
-    if (!node) throw new Error(`glTF node ${ni} missing`);
-    const local = node.matrix ? node.matrix : trs(node.translation ?? [0, 0, 0], node.rotation ?? [0, 0, 0, 1], node.scale ?? [1, 1, 1]);
-    const m = mul(parent, local);
-    if (node.mesh !== undefined) {
-      for (const prim of json.meshes?.[node.mesh]?.primitives ?? []) {
-        if ((prim.mode ?? 4) !== 4) continue; // triangles only
-        const pos = readAccessor(prim.attributes.POSITION!).data as Float32Array;
-        const idx = prim.indices !== undefined ? (readAccessor(prim.indices).data as Uint32Array) : Uint32Array.from({ length: pos.length / 3 }, (_, i) => i);
-        const world = new Float32Array(pos.length);
-        for (let i = 0; i < pos.length; i += 3) {
-          const x = pos[i]!, y = pos[i + 1]!, z = pos[i + 2]!;
+  // Per-node geometry in node-local space (read once); world transforms are applied per sampled time.
+  const geom = new Map<number, { pos: Float32Array; idx: Uint32Array; colors: Float32Array }[]>();
+  for (const [ni, node] of (json.nodes ?? []).entries()) {
+    if (node.mesh === undefined) continue;
+    const list: { pos: Float32Array; idx: Uint32Array; colors: Float32Array }[] = [];
+    for (const prim of json.meshes?.[node.mesh]?.primitives ?? []) {
+      if ((prim.mode ?? 4) !== 4) continue; // triangles only
+      const pos = readAccessor(prim.attributes.POSITION!).data as Float32Array;
+      const idx = prim.indices !== undefined ? (readAccessor(prim.indices).data as Uint32Array) : Uint32Array.from({ length: pos.length / 3 }, (_, i) => i);
+      const base = json.materials?.[prim.material ?? -1]?.pbrMetallicRoughness?.baseColorFactor ?? [0.7, 0.7, 0.7, 1];
+      const col = [srgbToLinear(base[0]!), srgbToLinear(base[1]!), srgbToLinear(base[2]!)];
+      const tris = Math.floor(idx.length / 3);
+      const colors = new Float32Array(tris * 3);
+      for (let t = 0; t < tris; t++) colors.set(col, t * 3);
+      list.push({ pos, idx: idx.subarray(0, tris * 3), colors });
+    }
+    geom.set(ni, list);
+  }
+
+  const tracks: Track[] = [];
+  const clip = json.animations?.[0];
+  if (clip) {
+    for (const ch of clip.channels) {
+      const path = ch.target.path;
+      if (ch.target.node === undefined || (path !== "translation" && path !== "rotation" && path !== "scale")) continue; // weights etc. are ignored
+      const smp = clip.samplers[ch.sampler];
+      if (!smp) continue;
+      if ((smp.interpolation ?? "LINEAR") !== "LINEAR") throw new Error(`unsupported animation interpolation ${smp.interpolation} (bake to linear keys)`);
+      tracks.push({ node: ch.target.node, path, times: readAccessor(smp.input).data as Float32Array, values: readAccessor(smp.output).data as Float32Array });
+    }
+  }
+  let animation: GltfModel["animation"] = null;
+  if (tracks.length) {
+    let start = Infinity, end = -Infinity, dt = Infinity;
+    for (const tr of tracks) {
+      start = Math.min(start, tr.times[0]!);
+      end = Math.max(end, tr.times[tr.times.length - 1]!);
+      for (let i = 1; i < tr.times.length; i++) dt = Math.min(dt, tr.times[i]! - tr.times[i - 1]!);
+    }
+    // A looping clip of N keys spaced dt repeats every N * dt, not (N - 1) * dt: the last key sits one step before the first again.
+    animation = end > start ? { start, end, period: end - start + (Number.isFinite(dt) ? dt : 0) } : null;
+  }
+  const byNode = new Map<number, Track[]>();
+  for (const tr of tracks) byNode.set(tr.node, [...(byNode.get(tr.node) ?? []), tr]);
+
+  const roots = json.scenes?.[json.scene ?? 0]?.nodes ?? (json.nodes ?? []).map((_, i) => i).filter((i) => !(json.nodes ?? []).some((n) => n.children?.includes(i)));
+  const meshesAt = (time?: number): Mesh[] => {
+    const clipT = animation ? clipTime(animation, time ?? 0) : null;
+    const meshes: Mesh[] = [];
+    const visit = (ni: number, parent: Mat4, depth: number) => {
+      if (depth > 64) throw new Error("glTF node hierarchy too deep");
+      const node = json.nodes?.[ni];
+      if (!node) throw new Error(`glTF node ${ni} missing`);
+      let tr = node.translation ?? [0, 0, 0], rot = node.rotation ?? [0, 0, 0, 1], sc = node.scale ?? [1, 1, 1];
+      if (clipT !== null) for (const k of byNode.get(ni) ?? []) { const v = sampleTrack(k, clipT); if (k.path === "translation") tr = v; else if (k.path === "rotation") rot = v; else sc = v; }
+      const local = node.matrix ? node.matrix : trs(tr, rot, sc);
+      const m = mul(parent, local);
+      for (const g of geom.get(ni) ?? []) {
+        const world = new Float32Array(g.pos.length);
+        for (let i = 0; i < g.pos.length; i += 3) {
+          const x = g.pos[i]!, y = g.pos[i + 1]!, z = g.pos[i + 2]!;
           world[i] = m[0]! * x + m[4]! * y + m[8]! * z + m[12]!;
           world[i + 1] = m[1]! * x + m[5]! * y + m[9]! * z + m[13]!;
           world[i + 2] = m[2]! * x + m[6]! * y + m[10]! * z + m[14]!;
         }
-        const base = json.materials?.[prim.material ?? -1]?.pbrMetallicRoughness?.baseColorFactor ?? [0.7, 0.7, 0.7, 1];
-        const col = [srgbToLinear(base[0]!), srgbToLinear(base[1]!), srgbToLinear(base[2]!)];
-        const tris = Math.floor(idx.length / 3);
-        const colors = new Float32Array(tris * 3);
-        for (let t = 0; t < tris; t++) colors.set(col, t * 3);
-        meshes.push({ positions: world, indices: idx.subarray(0, tris * 3), colors });
+        meshes.push({ positions: world, indices: g.idx, colors: g.colors });
       }
-    }
-    for (const c of node.children ?? []) visit(c, m, depth + 1);
+      for (const c of node.children ?? []) visit(c, m, depth + 1);
+    };
+    for (const r of roots) visit(r, IDENTITY, 0);
+    if (!meshes.length) throw new Error("glTF has no triangle meshes");
+    return meshes;
   };
-  const roots = json.scenes?.[json.scene ?? 0]?.nodes ?? (json.nodes ?? []).map((_, i) => i).filter((i) => !(json.nodes ?? []).some((n) => n.children?.includes(i)));
-  for (const r of roots) visit(r, IDENTITY, 0);
-  if (!meshes.length) throw new Error("glTF has no triangle meshes");
-  return meshes;
+  meshesAt(); // fail early on an unusable file, with the same messages as before
+  return { meshesAt, animation };
+}
+
+/** Parse a GLB at its first frame (static use: scenes, uploads, bounds). */
+export function parseGltf(bytes: Uint8Array): Mesh[] {
+  return loadGltf(bytes).meshesAt();
 }
 
 export function countTriangles(meshes: Mesh[]): number {

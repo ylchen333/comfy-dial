@@ -2,10 +2,10 @@
 // The Shot track is what rig-core's sampler and the verifier consume. Because the sampler only does
 // linear/slerp between keys, eased or aim-driven stretches get extra keys (adaptive bisection) until the
 // sampler reproduces the studio's own evaluation at every integer frame within tolerance.
-import { Shot } from "@comfy-osh/contracts";
+import { Shot } from "@comfy-dial/contracts";
 import {
   FPS, lookAtQuat, normalize, rotate, samplePose, sub, type Pose, type Quat, type Vec3,
-} from "@comfy-osh/rig-core";
+} from "@comfy-dial/rig-core";
 import { evalAll } from "./keys.ts";
 import { focalToFov, fovToFocal } from "./lens.ts";
 import type { Key, StudioDoc } from "./types.ts";

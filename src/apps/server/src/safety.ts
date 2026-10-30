@@ -31,3 +31,7 @@ export function liveRefusal(n: number, apiKey: string | undefined): string | nul
 /** One generated actor = one FLUX schnell image (4 steps) + one Hunyuan3D 2.1 shape job + a cold-start margin. Measured Oct 29: 4 credits and 74 s on a warm worker (one sample), plus the usual 8 margin. */
 export const ACTOR_CREDITS = 12;
 export const MAX_ACTOR_IMAGE_BYTES = 12 * 1024 * 1024;
+
+/** Upscale one take with SeedVR2 (3B) to this height (768x512 becomes 1536x1024). Credits are a guess until a live run measures them. */
+export const UPSCALE_HEIGHT = 1024;
+export const UPSCALE_CREDITS = 20;

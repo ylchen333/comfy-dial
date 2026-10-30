@@ -1,13 +1,13 @@
 import { mkdtempSync, readFileSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join, resolve } from "node:path";
-import { ControlPacket, ScoreReport, Shot } from "@comfy-osh/contracts";
+import { ControlPacket, ScoreReport, Shot } from "@comfy-dial/contracts";
 import { copyDecimate, copySample, copyStitch, copyTrim, SRC_DIR, type Tools } from "../src/tools.ts";
 
 export const FIXTURES = resolve(SRC_DIR, "packages/contracts/fixtures");
 export const loadShot = (name = "push_in") => Shot.parse(JSON.parse(readFileSync(join(FIXTURES, "shots", `${name}.json`), "utf8")));
 export const shotPath = (name = "push_in") => join(FIXTURES, "shots", `${name}.json`);
-export const tmp = () => mkdtempSync(join(tmpdir(), "comfy-osh-server-"));
+export const tmp = () => mkdtempSync(join(tmpdir(), "comfy-dial-server-"));
 
 export const packetFor = (shot: Shot, strength = 1) =>
   ControlPacket.parse({
@@ -31,7 +31,7 @@ export const fakeTools = (shot: Shot): Tools => ({
   stitch: copyStitch,
   async buildPoses(ext, _i, out, fps) {
     const empty = readFileSync(ext, "utf8").includes('"extrinsics":[]');
-    writeFileSync(out, JSON.stringify({ schema: "comfy-osh/poses/1", fps, image: { width: 768, height: 512 }, solve_ok: !empty, frames: empty ? [] : [{ index: 0, t: 0, position: [0, 0, 0], quaternion: [0, 0, 0, 1], fov_v_deg: 40 }] }));
+    writeFileSync(out, JSON.stringify({ schema: "comfy-dial/poses/1", fps, image: { width: 768, height: 512 }, solve_ok: !empty, frames: empty ? [] : [{ index: 0, t: 0, position: [0, 0, 0], quaternion: [0, 0, 0, 1], fov_v_deg: 40 }] }));
   },
   async score(_s, posesPath, id) {
     const solveOk = (JSON.parse(readFileSync(posesPath, "utf8")) as { solve_ok: boolean }).solve_ok;

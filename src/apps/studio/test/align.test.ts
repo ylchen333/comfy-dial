@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { sampleShot, type Quat, type Vec3 } from "@comfy-osh/rig-core";
+import { sampleShot, type Quat, type Vec3 } from "@comfy-dial/rig-core";
 import { alignRecovered } from "../src/logic/align.ts";
 import { exportShot } from "../src/logic/compile.ts";
 import { newDoc } from "../src/logic/keys.ts";
@@ -59,7 +59,7 @@ describe("alignRecovered", () => {
 import { runBlocker } from "../src/logic/runs.ts";
 
 describe("runBlocker", () => {
-  const health = { ok: true, liveAvailable: true, calibratedResolution: { width: 768, height: 512 }, maxLiveTakes: 5, repairCredits: 13, referenceCredits: 9, actorCredits: 24, cloud: true };
+  const health = { ok: true, liveAvailable: true, calibratedResolution: { width: 768, height: 512 }, maxLiveTakes: 5, repairCredits: 13, referenceCredits: 9, actorCredits: 12, upscaleCredits: 20, cloud: true };
   const base = { valid: true, live: true, health, resolution: { width: 768, height: 512 }, confirmed: true };
   it("allows a confirmed live run at the calibrated resolution", () => expect(runBlocker(base)).toBeNull());
   it("explains each refusal", () => {

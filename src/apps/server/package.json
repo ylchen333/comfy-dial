@@ -1,5 +1,5 @@
 {
-  "name": "@comfy-osh/server",
+  "name": "@comfy-dial/server",
   "private": true,
   "type": "module",
   "exports": {
@@ -15,7 +15,7 @@
     "serve": "node --experimental-strip-types --no-warnings src/serve.ts"
   },
   "dependencies": {
-    "@comfy-osh/contracts": "workspace:*",
-    "@comfy-osh/rig-core": "workspace:*"
+    "@comfy-dial/contracts": "workspace:*",
+    "@comfy-dial/rig-core": "workspace:*"
   }
 }

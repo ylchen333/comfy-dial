@@ -1,5 +1,5 @@
 import { useRef, useState } from "react";
-import { FPS } from "@comfy-osh/rig-core";
+import { FPS } from "@comfy-dial/rig-core";
 import { CHANNELS, EASINGS, type Channel, type Easing, type StudioDoc } from "../logic/types.ts";
 
 export interface SelectedKey { ch: Channel; frame: number }
@@ -42,8 +42,9 @@ export function Timeline(p: Props) {
 
   return (
     <div className="timeline">
+      <div className="tl-title"><span>Timeline</span><span className="vt">{doc.frames} F · {FPS} FPS</span></div>
       <div className="transport">
-        <button onClick={p.onPlayToggle}>{p.playing ? "Pause" : "Play"}</button>
+        <button type="button" onClick={p.onPlayToggle}>{p.playing ? "Pause" : "Play"}</button>
         <span className="mono">frame {p.frame}/{last} | {(p.frame / FPS).toFixed(2)}s / {(last / FPS).toFixed(2)}s @ {FPS} fps</span>
         {p.selected && selKey && (
           <span className="keyedit">
@@ -76,7 +77,7 @@ export function Timeline(p: Props) {
                 return (
                   <div
                     key={k.frame}
-                    className={`key${sel ? " sel" : ""}`}
+                    className={`key-wrap${sel ? " sel" : ""}`}
                     style={{ left: pct(f) }}
                     title={`${ch} @ ${k.frame} (${k.easing})`}
                     onDoubleClick={(e) => e.stopPropagation()}

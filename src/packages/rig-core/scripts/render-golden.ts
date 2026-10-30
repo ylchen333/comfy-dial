@@ -4,7 +4,7 @@ import { spawn, spawnSync } from "node:child_process";
 import { mkdirSync, readFileSync, writeFileSync } from "node:fs";
 import { dirname, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
-import { Shot } from "@comfy-osh/contracts";
+import { Shot } from "@comfy-dial/contracts";
 import { FIXTURE_CLIPS, buildMeta, ltxClips, renderClip, sampleShot, DEFAULT_DEPTH_NORM } from "../src/index.ts";
 
 // ffmpeg from PATH only.
@@ -22,7 +22,7 @@ mkdirSync(outDir, { recursive: true });
 
 const clips: Record<string, Shot> = {};
 for (const name of FIXTURE_CLIPS) {
-  const p = fileURLToPath(import.meta.resolve(`@comfy-osh/contracts/fixtures/shots/${name}.json`));
+  const p = fileURLToPath(import.meta.resolve(`@comfy-dial/contracts/fixtures/shots/${name}.json`));
   clips[name] = Shot.parse(JSON.parse(readFileSync(p, "utf8")));
 }
 Object.assign(clips, ltxClips());

@@ -1,6 +1,6 @@
 // The 5 move presets (push-in, pull-out, orbit, pan, dolly zoom) plus plain dolly / zoom helpers.
 // Each compiles to a contract-valid Shot whose track the sampler turns into per-frame poses.
-import type { Shot } from "@comfy-osh/contracts";
+import type { Shot } from "@comfy-dial/contracts";
 import { dollyZoomFovDeg } from "./fov.ts";
 import { lookAtQuat, yawQuat, type Quat, type Vec3 } from "./math.ts";
 
@@ -30,14 +30,14 @@ export interface PresetBase {
 }
 
 const r9 = (n: number) => Math.round(n * 1e9) / 1e9;
-const key = (t: number, position: Vec3, quaternion: Quat, fov: number): Shot["track"][number] => ({
+export const key = (t: number, position: Vec3, quaternion: Quat, fov: number): Shot["track"][number] => ({
   t: r9(t),
   position: position.map(r9) as Vec3,
   quaternion: quaternion.map(r9) as Quat,
   fov_v_deg: r9(fov),
 });
 
-function makeShot(base: PresetBase, track: Shot["track"]): Shot {
+export function makeShot(base: PresetBase, track: Shot["track"]): Shot {
   const frames = base.frames ?? DEFAULT_FRAMES;
   const cuts = [0, 1, 2, 3].map((i) => Math.floor((frames * i) / 3));
   return {
@@ -53,7 +53,7 @@ function makeShot(base: PresetBase, track: Shot["track"]): Shot {
   };
 }
 
-const duration = (base: PresetBase) => ((base.frames ?? DEFAULT_FRAMES) - 1) / FPS;
+export const duration = (base: PresetBase) => ((base.frames ?? DEFAULT_FRAMES) - 1) / FPS;
 
 export interface DollyOpts extends PresetBase { from: number; to: number; fovDeg: number }
 

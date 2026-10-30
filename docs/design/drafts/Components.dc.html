@@ -1,0 +1,212 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>Palette and controls</title>
+<script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Instrument+Serif&amp;family=Pixelify+Sans:wght@400;500;700&amp;family=VT323&amp;display=swap">
+<style>
+body{margin:0;background:#e4e3dd}
+*{box-sizing:border-box}
+.sheet{position:relative;z-index:0;color:#141414;font:400 14px/1.4 "Pixelify Sans",monospace;background-color:#ecebe5;background-image:radial-gradient(rgba(20,20,20,.07) 1px,transparent 1.3px);background-size:6px 6px}
+.num{font-family:VT323,monospace}
+.serif{font-family:"Instrument Serif",serif;font-weight:400}
+.box{position:relative;background:#f7f6f1;border:1px solid #141414}
+.box.dbl{border:4px double #141414}
+.mis::before{content:"";position:absolute;inset:7px -7px -7px 7px;border:1px solid #8f9bb0;z-index:-1;pointer-events:none}
+.bar{display:flex;align-items:center;gap:10px;padding:6px 10px;border-bottom:1px solid #141414;font:700 12px "Pixelify Sans";letter-spacing:.08em;text-transform:uppercase}
+.bar .rule{flex:1;height:9px;background:repeating-linear-gradient(180deg,#141414 0 1px,transparent 1px 3px)}
+.bar .x{font:18px/1 VT323,monospace;border:1px solid #141414;padding:0 4px}
+.lbl{font-size:12px;letter-spacing:.06em;text-transform:uppercase;margin:0}
+.hint{font-size:12.5px;color:#3a3a3a;margin:0}
+.btn{appearance:none;min-height:44px;padding:0 16px;border:1px solid #141414;background:#faf9f4;color:#141414;font:500 14px "Pixelify Sans",monospace;box-shadow:3px 3px 0 #141414;cursor:pointer;display:inline-flex;align-items:center;justify-content:center;gap:8px;white-space:nowrap}
+.btn:hover,.btn.is-hover{background:#141414;color:#faf9f4}
+.btn:active,.btn.is-press{transform:translate(3px,3px);box-shadow:none}
+.btn.on{background:#141414;color:#faf9f4}
+.btn.sig{background:#e2552b;color:#141414}
+.btn:disabled{opacity:.4;box-shadow:none;cursor:default}
+.btn:focus-visible,.key:focus-visible,.wire:focus-visible,.tab:focus-visible{outline:2px dashed #2f4fd8;outline-offset:4px}
+.key{appearance:none;width:44px;height:44px;border:1px solid #141414;background:#faf9f4;color:#141414;font:20px/1 VT323,monospace;cursor:pointer;display:grid;place-items:center;box-shadow:2px 2px 0 #141414}
+.key:hover{background:#141414;color:#faf9f4}
+.key:active{transform:translate(2px,2px);box-shadow:none}
+.wire{appearance:none;border:1px solid #141414;padding:0;width:120px;height:120px;border-radius:50%;background:#faf9f4;cursor:grab;position:relative;box-shadow:4px 4px 0 #141414}
+.wire svg{position:absolute;inset:0;width:100%;height:100%}
+.wire:hover svg{animation:spin 4s steps(24) infinite}
+@keyframes spin{to{transform:rotate(360deg)}}
+.dial{position:relative;width:110px;height:110px;border-radius:50%;border:1px solid #141414;background:repeating-conic-gradient(from 0deg,#141414 0 1deg,transparent 1deg 10deg)}
+.dial .face{position:absolute;inset:12px;border-radius:50%;border:1px solid #141414;background:#faf9f4}
+.dial .ptr{position:absolute;left:calc(50% - 1px);top:6px;width:2px;height:38px;background:#141414;transform-origin:50% 49px}
+.seg{display:inline-flex;border:1px solid #141414;box-shadow:3px 3px 0 #141414}
+.seg button{appearance:none;border:0;min-width:96px;min-height:44px;font:500 14px "Pixelify Sans",monospace;background:#faf9f4;color:#141414;cursor:pointer}
+.seg button+button{border-left:1px solid #141414}
+.seg button.on{background:#141414;color:#faf9f4}
+.cells{display:flex;gap:4px}
+.cells span{width:44px;height:60px;display:grid;place-items:center;font:60px/1 VT323,monospace;border:1px solid #141414;background:#faf9f4}
+.rng{-webkit-appearance:none;appearance:none;width:100%;height:44px;background:transparent;cursor:pointer;margin:0}
+.rng::-webkit-slider-runnable-track{height:12px;border:1px solid #141414;background:repeating-linear-gradient(90deg,#141414 0 1px,#faf9f4 1px 10px)}
+.rng::-webkit-slider-thumb{-webkit-appearance:none;width:16px;height:30px;margin-top:-10px;background:#141414;border:0}
+.rng::-moz-range-thumb{width:16px;height:30px;background:#141414;border:0;border-radius:0}
+.mk{display:inline-flex;align-items:center;gap:6px;font:700 11px "Pixelify Sans";letter-spacing:.08em;text-transform:uppercase}
+.mk.held i{width:9px;height:9px;background:#141414}
+.mk.drift{background:#e2552b;padding:2px 6px;border:1px solid #141414}
+.mk.drift i{width:0;height:0;border-left:5px solid transparent;border-right:5px solid transparent;border-bottom:9px solid #141414}
+.mk.adv{border:1px dashed #141414;padding:2px 6px}
+.meter{position:relative;height:22px;border:1px solid #141414;background:#faf9f4}
+.meter .fill{position:absolute;left:0;top:0;bottom:0;background:#141414;transition:width .5s steps(12)}
+.meter .fill.drift{background:#e2552b}
+.meter .gate{position:absolute;top:-6px;bottom:-6px;width:0;border-left:2px dashed #2f4fd8}
+.tab{appearance:none;border:1px solid #141414;border-bottom:0;margin-right:-1px;background:#e2e1da;cursor:pointer;min-width:110px;min-height:52px;padding:6px 12px;font:500 12px "Pixelify Sans";text-align:left}
+.tab.on{background:#f7f6f1;box-shadow:inset 0 3px 0 #141414}
+.sw{height:60px;border:1px solid #141414}
+.spec{width:100%;border-collapse:collapse;font-size:13.5px}
+.spec th{font:700 12px "Pixelify Sans";letter-spacing:.08em;text-transform:uppercase;text-align:left;padding:7px 10px;border-bottom:1px solid #141414}
+.spec td{padding:6px 10px;border-bottom:1px dashed rgba(20,20,20,.35);vertical-align:top}
+@media (prefers-reduced-motion:reduce){*{animation:none!important;transition:none!important}}
+</style>
+</helmet>
+<div class="sheet" style="width: 1440px; height: 1240px; padding: 34px 40px; display: flex; flex-direction: column; gap: 24px">
+<div style="display: flex; align-items: flex-end; gap: 24px; border-bottom: 4px double #141414; padding-bottom: 12px">
+<h1 class="serif" style="margin: 0; font-size: 110px; line-height: .82; letter-spacing: -.02em">ComfyDial</h1>
+<div style="display: flex; flex-direction: column; gap: 6px; padding-bottom: 8px">
+<span class="lbl">[ palette + controls ]</span>
+<span class="num" style="font-size: 22px">DS-01 · VINTAGE COMPUTING · PROGRAMMATIC BRUTALIST</span>
+</div>
+</div>
+
+<div style="display: grid; grid-template-columns: minmax(0, 1.25fr) minmax(0, 1fr); gap: 26px">
+<section class="box mis">
+<div class="bar"><span>Palette</span><span class="rule"></span><span class="x" aria-hidden="true">x</span></div>
+<div style="padding: 14px; display: grid; grid-template-columns: repeat(6, minmax(0, 1fr)); gap: 12px">
+<div style="display: flex; flex-direction: column; gap: 4px"><div class="sw" style="background-color: #ecebe5; background-image: radial-gradient(rgba(20,20,20,.12) 1px, transparent 1.3px); background-size: 6px 6px"></div><span class="lbl">Paper</span><span class="num" style="font-size: 17px">#ECEBE5</span></div>
+<div style="display: flex; flex-direction: column; gap: 4px"><div class="sw" style="background: #f7f6f1"></div><span class="lbl">Panel</span><span class="num" style="font-size: 17px">#F7F6F1</span></div>
+<div style="display: flex; flex-direction: column; gap: 4px"><div class="sw" style="background: #141414"></div><span class="lbl">Ink</span><span class="num" style="font-size: 17px">#141414</span></div>
+<div style="display: flex; flex-direction: column; gap: 4px"><div class="sw" style="background: #2f4fd8"></div><span class="lbl">Signal blue</span><span class="num" style="font-size: 17px">#2F4FD8</span></div>
+<div style="display: flex; flex-direction: column; gap: 4px"><div class="sw" style="background: #e2552b"></div><span class="lbl">Signal orange</span><span class="num" style="font-size: 17px">#E2552B</span></div>
+<div style="display: flex; flex-direction: column; gap: 4px"><div class="sw" style="background: linear-gradient(180deg, #05070d, #0b1020 55%, #2f4fd8)"></div><span class="lbl">Screen</span><span class="num" style="font-size: 17px">#05070D</span></div>
+</div>
+<p class="hint" style="padding: 0 14px 14px">Ink on paper does almost everything. Blue = pass line, focus, playhead. Orange = spends credits or drifted. Yellow #FFD23F and cyan #3FD2FF only appear inside a screen.</p>
+</section>
+<section class="box mis">
+<div class="bar"><span>Type</span><span class="rule"></span></div>
+<div style="padding: 14px; display: flex; flex-direction: column; gap: 8px">
+<div style="display: flex; align-items: baseline; gap: 18px"><span class="serif" style="font-size: 56px; line-height: .9">Review</span><span class="num" style="font-size: 56px; line-height: .9">1.80°</span></div>
+<span class="hint">Instrument Serif: only the ComfyDial name and the Author / Generate / Review tabs.</span>
+<span style="font-size: 16px">Pixelify Sans for every label, button and sentence.</span>
+<span class="hint">VT323 for numbers, timecode, ids and frame counts.</span>
+</div>
+</section>
+</div>
+
+<div style="display: grid; grid-template-columns: minmax(0, 1.25fr) minmax(0, 1fr); gap: 26px">
+<section class="box mis">
+<div class="bar"><span>Buttons + markers</span><span class="rule"></span></div>
+<div style="padding: 16px; display: flex; flex-direction: column; gap: 16px">
+<div style="display: flex; flex-wrap: wrap; gap: 14px; align-items: center">
+<button type="button" class="btn">Rest</button>
+<button type="button" class="btn is-hover">Hover</button>
+<button type="button" class="btn is-press">Pressed</button>
+<button type="button" class="btn on">On</button>
+<button type="button" class="btn" disabled>Disabled</button>
+<button type="button" class="btn sig">Repair · 8 credits</button>
+</div>
+<div style="display: flex; flex-wrap: wrap; gap: 16px; align-items: center">
+<span class="mk held"><i aria-hidden="true"></i>Pass · all held</span>
+<span class="mk drift"><i aria-hidden="true"></i>Seg drifted</span>
+<span class="mk adv">Move label (advisory)</span>
+</div>
+<p class="hint">Hard 3 px offset shadow, no gradients. Hover inverts; press drops into the shadow. Status is always a shape and a word: ■ held, ▲ drifted.</p>
+</div>
+</section>
+<section class="box mis">
+<div class="bar"><span>Take tabs</span><span class="rule"></span></div>
+<div style="padding: 16px">
+<div style="display: flex; border-bottom: 1px solid #141414">
+<button type="button" class="tab"><span class="num" style="font-size: 22px">3000</span><br><span class="mk held"><i aria-hidden="true"></i>held</span></button>
+<button type="button" class="tab on"><span class="num" style="font-size: 22px">3002</span><br><span class="mk drift"><i aria-hidden="true"></i>drift</span></button>
+<button type="button" class="tab"><span class="num" style="font-size: 22px">3004</span><br><span class="mk held"><i aria-hidden="true"></i>held</span></button>
+</div>
+<p class="hint" style="margin-top: 12px">Folder tabs like a Win98 dialog: the open take joins the panel below it.</p>
+</div>
+</section>
+</div>
+
+<div style="display: grid; grid-template-columns: minmax(0, 1.25fr) minmax(0, 1fr); gap: 26px">
+<section class="box mis">
+<div class="bar"><span>Controls</span><span class="rule"></span></div>
+<div style="padding: 16px; display: flex; flex-wrap: wrap; gap: 28px; align-items: center">
+<div style="display: flex; flex-direction: column; align-items: center; gap: 10px">
+<button class="wire" type="button" aria-label="Orbit sphere"><svg viewBox="0 0 136 136" aria-hidden="true"><g fill="none" stroke="#141414" stroke-width="1"><ellipse cx="68" cy="68" rx="66" ry="22" stroke-dasharray="3 3"></ellipse><ellipse cx="68" cy="68" rx="66" ry="46"></ellipse><ellipse cx="68" cy="68" rx="22" ry="66" stroke-dasharray="3 3"></ellipse><ellipse cx="68" cy="68" rx="46" ry="66"></ellipse></g><rect x="62" y="62" width="12" height="12" fill="#141414"></rect></svg></button>
+<span class="lbl">Orbit sphere</span>
+</div>
+<div style="display: flex; flex-direction: column; align-items: center; gap: 4px">
+<div style="display: grid; grid-template-columns: repeat(3, 44px); grid-template-rows: repeat(3, 44px); gap: 4px; place-items: center">
+<span></span><button class="key" type="button" aria-label="Pan up">▲</button><span></span>
+<button class="key" type="button" aria-label="Pan left">◀</button><span aria-hidden="true" style="width: 18px; height: 18px; border: 1px solid #141414; background: repeating-conic-gradient(#141414 0 25%, transparent 0 50%) 0 0/6px 6px"></span><button class="key" type="button" aria-label="Pan right">▶</button>
+<span></span><button class="key" type="button" aria-label="Pan down">▼</button><span></span>
+</div>
+<span class="lbl">Pan keys</span>
+</div>
+<div style="display: flex; flex-direction: column; align-items: center; gap: 10px">
+<div class="dial" aria-hidden="true"><div class="face"></div><div class="ptr" style="transform: rotate(-35deg)"></div></div>
+<span class="lbl">Lens dial</span>
+</div>
+<div style="display: flex; flex-direction: column; gap: 14px">
+<div class="seg" role="radiogroup" aria-label="Mode"><button type="button" role="radio" aria-checked="true" class="on">Dry run</button><button type="button" role="radio" aria-checked="false">Live</button></div>
+<div style="display: flex; align-items: center; gap: 12px"><div class="cells" aria-label="4 takes"><span>0</span><span>4</span></div><span class="lbl">Take count</span></div>
+<label style="display: flex; flex-direction: column; width: 230px" class="lbl">Ruled slider<input class="rng" type="range" min="0" max="1" step="0.05" value="0.8"></label>
+</div>
+</div>
+</section>
+<section class="box mis">
+<div class="bar"><span>Score meter</span><span class="rule"></span></div>
+<div style="padding: 16px; display: flex; flex-direction: column; gap: 12px">
+<span class="num" style="font-size: 72px; line-height: .8">{{rotText}}°</span>
+<div class="meter" role="img" aria-label="{{meterLabel}}"><span class="{{fillCls}}" style="width: {{fillPct}}%"></span><span class="gate" style="left: 55%"></span></div>
+<div style="display: flex; justify-content: space-between" class="num"><span style="font-size: 16px">0°</span><span style="font-size: 16px; color: #2f4fd8">PASS LINE 2.75°</span><span style="font-size: 16px">5°</span></div>
+<button type="button" class="btn" onClick="{{flip}}" style="align-self: flex-start">Play a score landing</button>
+</div>
+</section>
+</div>
+
+<section class="box">
+<div class="bar"><span>Motion</span><span class="rule"></span><span>stepped, never smooth</span></div>
+<div style="padding: 4px 8px 10px">
+<table class="spec">
+<thead><tr><th scope="col">Element</th><th scope="col">Trigger</th><th scope="col">Motion</th><th scope="col">Timing</th></tr></thead>
+<tbody>
+<tr><td>Button, key</td><td>hover / press</td><td>colours invert / drops 2–3 px into its hard shadow</td><td class="num" style="font-size: 18px">0 MS · INSTANT</td></tr>
+<tr><td>Take tab</td><td>select</td><td>tab joins the panel; 3 px ink rule appears on top</td><td class="num" style="font-size: 18px">0 MS · INSTANT</td></tr>
+<tr><td>Orbit sphere</td><td>hover / drag</td><td>wireframe ticks round in 24 steps / follows the drag</td><td class="num" style="font-size: 18px">4 S · STEPS(24)</td></tr>
+<tr><td>Score meter</td><td>a score arrives</td><td>bar fills in 12 chunky steps toward the value</td><td class="num" style="font-size: 18px">500 MS · STEPS(12)</td></tr>
+<tr><td>Everything</td><td>prefers-reduced-motion</td><td>all animation off</td><td class="num" style="font-size: 18px">0 MS</td></tr>
+</tbody>
+</table>
+</div>
+</section>
+</div>
+</x-dc>
+<script type="text/x-dc" data-dc-script data-props='{"$preview":{"width":1440,"height":1240}}'>
+class Component extends DCLogic {
+  constructor(props) {
+    super(props);
+    this.state = { rot: 0.9 };
+  }
+  renderVals() {
+    const rot = this.state.rot;
+    const drift = rot >= 2.75;
+    return {
+      rotText: rot.toFixed(2),
+      fillPct: ((rot / 5) * 100).toFixed(1),
+      fillCls: drift ? 'fill drift' : 'fill',
+      meterLabel: 'Rotation error ' + rot.toFixed(1) + ' degrees; pass line 2.75',
+      flip: () => this.setState({ rot: drift ? 0.9 : 3.1 })
+    };
+  }
+}
+</script>
+</body>
+</html>

@@ -1,6 +1,6 @@
 // Move presets: thin wrapper over rig-core's presets that turns their Shot into editable keyframes.
-import { dolly, dollyZoom, orbit, pan, pullOut, pushIn, zoom, type Vec3 } from "@comfy-osh/rig-core";
-import type { Shot } from "@comfy-osh/contracts";
+import { dolly, dollyZoom, orbit, pan, pullOut, pushIn, zoom, type Vec3 } from "@comfy-dial/rig-core";
+import type { Shot } from "@comfy-dial/contracts";
 import { docFromShot } from "./compile.ts";
 import { evalChannel, replaceKeys } from "./keys.ts";
 import { focalToFov } from "./lens.ts";

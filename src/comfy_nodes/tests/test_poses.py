@@ -59,7 +59,7 @@ def test_validates_against_poses_contract():
     import sys
     sys.path.insert(0, str(pathlib.Path(__file__).parents[2] / "packages/contracts/python"))
     import json
-    from comfy_osh_contracts import Poses
+    from comfy_dial_contracts import Poses
 
     rng = np.random.default_rng(0)
     ext = []

@@ -1,6 +1,6 @@
 // Shot JSON import/export, validated with the contract's zod schemas. Errors are human-readable lines.
-import { Poses, Shot } from "@comfy-osh/contracts";
-import type { Vec3 } from "@comfy-osh/rig-core";
+import { Poses, Shot } from "@comfy-dial/contracts";
+import type { Vec3 } from "@comfy-dial/rig-core";
 import { docFromShot, exportShot } from "./compile.ts";
 import type { StudioDoc } from "./types.ts";
 

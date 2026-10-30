@@ -6,7 +6,7 @@ Reports only; it never changes pass thresholds.
 import json
 from pathlib import Path
 
-from comfy_osh_contracts import Shot
+from comfy_dial_contracts import Shot
 
 from .score import score
 

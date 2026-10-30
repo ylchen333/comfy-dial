@@ -5,7 +5,7 @@ import json
 import sys
 from pathlib import Path
 
-from comfy_osh_contracts import Shot
+from comfy_dial_contracts import Shot
 
 from .moveclass import classify, focal_ratio, moves_match
 from .score import TRANS_GATE_RATIO_TOL, drivers, score
@@ -48,7 +48,7 @@ def main(argv=None):
         print(json.dumps(rows, indent=2))
         return 0
     raw = json.loads(Path(a.shot).read_text())
-    if raw.get("format") == "comfy-osh.golden-clip/1":  # golden-clip .meta.json wraps the Shot
+    if raw.get("format") == "comfy-dial.golden-clip/1":  # golden-clip .meta.json wraps the Shot
         raw = raw["shot"]
     shot = Shot.model_validate_json(json.dumps(raw))
     if a.cmd == "classify":

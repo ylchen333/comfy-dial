@@ -1,4 +1,4 @@
-"""comfy-osh custom nodes (local mode). Tested Oct 18: Comfy Cloud rejects the unpublished ComfyOSH_SaveCameraPosesJSON as unknown_class_type, while the pack workflow validates. Untested whether publishing to the Registry changes that."""
+"""comfy-dial custom nodes (local mode). Tested Oct 18: Comfy Cloud rejects the unpublished ComfyDial_SaveCameraPosesJSON as unknown_class_type, while the pack workflow validates. Untested whether publishing to the Registry changes that."""
 import json
 import os
 
@@ -17,9 +17,9 @@ if io is not None:
         @classmethod
         def define_schema(cls) -> io.Schema:
             return io.Schema(
-                node_id="ComfyOSH_SaveCameraPosesJSON",
+                node_id="ComfyDial_SaveCameraPosesJSON",
                 display_name="Save Camera Poses JSON",
-                category="comfy_osh",
+                category="comfy_dial",
                 description="Writes DA3 multiview extrinsics/intrinsics as poses.json (three.js Y-up c2w).",
                 inputs=[
                     DA3Geometry.Input("da3_geometry"),
@@ -45,10 +45,10 @@ if io is not None:
             return io.NodeOutput(ui=ui.PreviewText(f"{sub}/{fname}" if sub else fname))
 
 
-    class ComfyOSHExtension(ComfyExtension):
+    class ComfyDialExtension(ComfyExtension):
         async def get_node_list(self) -> list[type[io.ComfyNode]]:
             return [SaveCameraPosesJSON]
 
 
-    async def comfy_entrypoint() -> ComfyOSHExtension:
-        return ComfyOSHExtension()
+    async def comfy_entrypoint() -> ComfyDialExtension:
+        return ComfyDialExtension()

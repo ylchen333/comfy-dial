@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { DEFAULT_DEPTH_NORM, lookAtQuat, meshBounds, renderClip, type Vec3 } from "@comfy-osh/rig-core";
+import { DEFAULT_DEPTH_NORM, lookAtQuat, meshBounds, renderClip, type Vec3 } from "@comfy-dial/rig-core";
 import { AssetStore } from "../src/assets.ts";
 import { tmp } from "./helpers.ts";
 
@@ -24,7 +24,7 @@ describe("bundled actors", () => {
     expect(store.fileFor("actors/mannequin_stride.glb")).not.toBeNull();
     expect(store.fileFor("actors/../scenes/street.glb")).toBeNull();
     expect(store.fileFor("actors/nope.glb")).toBeNull();
-    expect(store.listActors().map((a) => a.asset)).toEqual(["actors/mannequin_stand.glb", "actors/mannequin_stride.glb"]);
+    expect(store.listActors().map((a) => a.asset)).toEqual(["actors/dancing_baby.glb", "actors/mannequin_stand.glb", "actors/mannequin_stride.glb"]);
   });
 
   it("are about 1.8 m tall with the soles 0.9 m below the origin, so a subject at y = 0.9 stands on the ground", () => {
@@ -44,5 +44,34 @@ describe("bundled actors", () => {
   it("face the studio's default camera (+Z): the front is wider than the side", () => {
     const width = (m: boolean[][]) => Math.max(...m.map((r) => r.reduce((n, v) => n + (v ? 1 : 0), 0)));
     expect(width(mask("actors/mannequin_stand.glb", [0, 0.9, 6]))).toBeGreaterThan(width(mask("actors/mannequin_stand.glb", [6, 0.9, 0])));
+  });
+});
+
+describe("dancing baby", () => {
+  it("is a small figure with its feet at the origin, so a prop at y = 0 stands on the ground", () => {
+    const b = meshBounds(store.resolver()("actors/dancing_baby.glb"));
+    expect(b.max[1] - b.min[1]).toBeGreaterThan(0.6);
+    expect(b.max[1] - b.min[1]).toBeLessThan(1.1);
+    expect(Math.abs(b.min[1])).toBeLessThan(0.02);
+  });
+});
+
+describe("animated actors in the depth guide", () => {
+  it("the dancing baby moves: the guide frames differ between times, and the clip loops", () => {
+    const eye: Vec3 = [0, 0.4, 3];
+    const pose = (t: number) => ({ frame: Math.round(t * 25), t, position: eye, quaternion: lookAtQuat(eye, [0, 0.4, 0]), fov_v_deg: 30 });
+    const shot = { scene: { nodes: [{ id: "baby", asset: "actors/dancing_baby.glb", transform: { position: [0, 0, 0] as Vec3, quaternion: [0, 0, 0, 1] as [number, number, number, number], scale: [1, 1, 1] as Vec3 } }] }, resolution: { width: 96, height: 96 } };
+    const frames = [...renderClip(shot, [0, 0.4, 1.2, 2.4, 4.84].map(pose), DEFAULT_DEPTH_NORM, store.resolver())];
+    const diff = (a: Uint8Array, b: Uint8Array) => a.reduce((n, v, i) => n + (v !== b[i] ? 1 : 0), 0);
+    expect(diff(frames[0]!.depth8, frames[1]!.depth8)).toBeGreaterThan(20); // the pose changes within half a second
+    expect(diff(frames[0]!.depth8, frames[3]!.depth8)).toBeGreaterThan(20);
+    expect(diff(frames[0]!.depth8, frames[4]!.depth8)).toBeLessThan(diff(frames[0]!.depth8, frames[3]!.depth8)); // the loop closes: 4.84 s is back near the start
+  });
+  it("a static asset renders the same at every time", () => {
+    const eye: Vec3 = [0, 0.9, 6];
+    const pose = (t: number) => ({ frame: 0, t, position: eye, quaternion: lookAtQuat(eye, [0, 0.9, 0]), fov_v_deg: 30 });
+    const shot = { scene: { nodes: [node("actors/mannequin_stand.glb")] }, resolution: { width: 64, height: 64 } };
+    const [a, b] = [...renderClip(shot, [pose(0), pose(2.5)], DEFAULT_DEPTH_NORM, store.resolver())];
+    expect(Buffer.compare(Buffer.from(a!.depth8), Buffer.from(b!.depth8))).toBe(0);
   });
 });

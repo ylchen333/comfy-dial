@@ -1,6 +1,6 @@
 {
   "$schema": "https://json-schema.org/draft/2020-12/schema",
-  "$id": "https://comfy-osh.dev/schema/control-packet.schema.json",
+  "$id": "https://comfy-dial.dev/schema/control-packet.schema.json",
   "title": "ControlPacket",
   "description": "What the GENERATE step needs besides the prompt. Rule enforced by mirrors: depthNormalization.far > near.",
   "type": "object",

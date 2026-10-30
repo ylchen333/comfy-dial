@@ -1,6 +1,6 @@
 {
   "$schema": "https://json-schema.org/draft/2020-12/schema",
-  "$id": "https://comfy-osh.dev/schema/score-report.schema.json",
+  "$id": "https://comfy-dial.dev/schema/score-report.schema.json",
   "title": "ScoreReport",
   "description": "Verifier output for one candidate. Errors are null when solveOk is false; transErrPct is null in rotation_only mode. Rules enforced by mirrors: solveOk=false implies pass=false and null errors.",
   "type": "object",

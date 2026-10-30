@@ -1,4 +1,4 @@
-# SPEC.md — Comfy-OSH: the camera move that checks itself
+# SPEC.md — Comfy-Dial: the camera move that checks itself
 
 **One line:** Draw a camera move in 3D → LTX generates N takes → the app **measures** which takes actually followed the move → ranks them → regenerates only the segment that drifted.
 
@@ -31,7 +31,7 @@
 | Time | Screen | Voiceover |
 |---|---|---|
 | 0:00 | Generic preset dropdown, then a reroll montage | "AI video gives you camera presets. Then it ignores them. Creators reroll three to five times per usable shot." |
-| 0:10 | Studio: drag camera along a dolly rail, set 35mm | "Comfy-OSH flips it. You don't pick a preset. You draw the move." |
+| 0:10 | Studio: drag camera along a dolly rail, set 35mm | "Comfy-Dial flips it. You don't pick a preset. You draw the move." |
 | 0:20 | Depth guide renders, contact sheet fills with 8 takes | "We render that move into a depth guide, and LTX generates eight takes." |
 | 0:30 | 3D overlay: drawn path (white) vs recovered paths (colored), live numbers | "Then the app does what no released tool does: it recovers the camera from every take and measures it against the path you drew." |
 | 0:45 | Ranked list, take 6 flagged red after frame 60 | "Take 3 held the dolly within two degrees. Take 6 drifted after frame sixty." |
@@ -119,7 +119,7 @@ Facts the build relies on:
 
 **Cloud and custom nodes (tested Oct 18 with `comfy workflow validate --where cloud`, free):**
 - Cloud's node catalogue (`object_info`) includes many community packs. `da3_poses.api.json`, which uses the `ComfyUI-DepthAnythingV3` pack, validates (`valid: true`) and runs.
-- `da3_poses_local.api.json`, which uses our own unpublished `ComfyOSH_SaveCameraPosesJSON`, is rejected with `unknown_class_type`. It is the only error, so the core nodes in that graph are fine.
+- `da3_poses_local.api.json`, which uses our own unpublished `ComfyDial_SaveCameraPosesJSON`, is rejected with `unknown_class_type`. It is the only error, so the core nodes in that graph are fine.
 - Not tested: whether publishing a node to the Comfy Registry puts it on Cloud, and whether the cloud.comfy.org web app lets a user add a node by hand. Until tested, assume Cloud runs only nodes already in its catalogue.
 - No core node exports DA3 extrinsics/intrinsics (checked Oct 16: `DA3Inference` returns geometry only).
 
@@ -145,7 +145,7 @@ Source of truth: JSON Schema in `src/packages/contracts/schema/`. TS (zod) and P
 | `ControlPacket` | `shotId`, `depthVideo`, `depthNormalization` (near/far, fixed), `iclora` (name, strength) |
 | `Candidate` | `shotId`, `seed`, `idempotencyKey`, `jobId`, `status`, `video` |
 | `ScoreReport` | `candidateId`, `solveOk`, `rotErrDeg`, `transErrPct`, `fovErrDeg`, `perSegment[]`, `composite`, `pass` |
-| `Poses` | `schema` (`comfy-osh/poses/1`), `fps`, `image`, `solve_ok`, `frames[]` (index, `t`, position, quaternion, fov_v_deg, optional fx/fy/cx/cy). Camera-to-world, same convention as `Shot`. Frames may be a subset: the verifier interpolates onto the Shot's frame times using `t`. |
+| `Poses` | `schema` (`comfy-dial/poses/1`), `fps`, `image`, `solve_ok`, `frames[]` (index, `t`, position, quaternion, fov_v_deg, optional fx/fy/cx/cy). Camera-to-world, same convention as `Shot`. Frames may be a subset: the verifier interpolates onto the Shot's frame times using `t`. |
 
 ---
 
@@ -186,7 +186,7 @@ Source of truth: JSON Schema in `src/packages/contracts/schema/`. TS (zod) and P
 All code that builds the app lives in `src/` (the pnpm workspace root). Project docs, git, licence and Claude config stay at the top level. Paths elsewhere in this spec (`apps/…`, `verifier/`, `workflows/`) are relative to `src/`.
 
 ```
-comfy-osh/
+comfy-dial/
 ├─ SPEC.md, SKILLS.md, INITIAL_PROMPT.txt, CLAUDE.md, LICENSE (MIT)
 ├─ .claude/              agents, settings, hooks
 ├─ docs/                 README, licences table, spikes, demo assets
@@ -198,7 +198,7 @@ comfy-osh/
    ├─ verifier/             Python: pose parsing, umeyama, metrics, segment scoring, pytest
    ├─ comfy_nodes/          (fallback) V3 node SaveCameraPosesJSON; optional CS_VERIFIER adapter
    ├─ workflows/            API-format JSON: ltx25_union_depth, da3_poses, ltx25_extend_segment
-   └─ tests/golden/         clip metadata + expected scores (mp4s are git-ignored; `pnpm --filter @comfy-osh/rig-core render:golden` regenerates them, needs ffmpeg)
+   └─ tests/golden/         clip metadata + expected scores (mp4s are git-ignored; `pnpm --filter @comfy-dial/rig-core render:golden` regenerates them, needs ffmpeg)
 ```
 
 Licence: **MIT**. Don't copy CozyClay (AGPL) or archviz workflows (CC BY-SA).

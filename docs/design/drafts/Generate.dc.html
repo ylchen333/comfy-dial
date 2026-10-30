@@ -1,0 +1,184 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>Generate room</title>
+<script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Instrument+Serif&amp;family=Pixelify+Sans:wght@400;500;700&amp;family=VT323&amp;display=swap">
+<style>
+body{margin:0;background:#e4e3dd}
+*{box-sizing:border-box}
+.app{position:relative;z-index:0;min-height:100vh;color:#141414;font:400 14px/1.4 "Pixelify Sans",monospace;background-color:#ecebe5;background-image:radial-gradient(rgba(20,20,20,.07) 1px,transparent 1.3px);background-size:6px 6px}
+.num{font-family:VT323,monospace}
+.serif{font-family:"Instrument Serif",serif;font-weight:400}
+.box{position:relative;background:#f7f6f1;border:1px solid #141414}
+.box.dbl{border:4px double #141414}
+.mis::before{content:"";position:absolute;inset:7px -7px -7px 7px;border:1px solid #8f9bb0;z-index:-1;pointer-events:none}
+.bar{display:flex;align-items:center;gap:10px;padding:6px 10px;border-bottom:1px solid #141414;font:700 12px "Pixelify Sans";letter-spacing:.08em;text-transform:uppercase}
+.bar .rule{flex:1;height:9px;background:repeating-linear-gradient(180deg,#141414 0 1px,transparent 1px 3px)}
+.bar .x{font:18px/1 VT323,monospace;border:1px solid #141414;padding:0 4px}
+.hint{font-size:12.5px;color:#3a3a3a;margin:0}
+.lbl{font-size:12px;letter-spacing:.06em;text-transform:uppercase;margin:0}
+.btn{appearance:none;min-height:44px;padding:0 16px;border:1px solid #141414;background:#faf9f4;color:#141414;font:500 14px "Pixelify Sans",monospace;box-shadow:3px 3px 0 #141414;cursor:pointer;display:inline-flex;align-items:center;justify-content:center;gap:8px;text-decoration:none;white-space:nowrap}
+.btn:hover{background:#141414;color:#faf9f4}
+.btn:active{transform:translate(3px,3px);box-shadow:none}
+.btn.on{background:#141414;color:#faf9f4}
+.btn:focus-visible,.room:focus-visible,.key:focus-visible,.seg button:focus-visible,.shoot:focus-visible{outline:2px dashed #2f4fd8;outline-offset:4px}
+.room{display:inline-flex;align-items:center;min-height:48px;padding:0 14px;font:400 34px/1 "Instrument Serif",serif;color:#141414;text-decoration:none;border:1px solid transparent}
+.room:hover{border-color:#141414}
+.room.on{background:#141414;color:#f7f6f1}
+.chk{display:inline-block;width:26px;height:26px;border:1px solid #141414;background:repeating-conic-gradient(#141414 0 25%,transparent 0 50%) 0 0/8px 8px}
+.key{appearance:none;width:44px;height:44px;border:1px solid #141414;background:#faf9f4;color:#141414;font:20px/1 VT323,monospace;cursor:pointer;display:grid;place-items:center;box-shadow:2px 2px 0 #141414}
+.key:hover{background:#141414;color:#faf9f4}
+.key:active{transform:translate(2px,2px);box-shadow:none}
+.sheet{width:100%;border:0;resize:vertical;outline:none;padding:0;background:repeating-linear-gradient(180deg,transparent 0 29px,rgba(20,20,20,.25) 29px 30px);font:400 16px/30px "Pixelify Sans",monospace;color:#141414}
+.sheet:focus-visible{outline:2px dashed #2f4fd8;outline-offset:6px}
+.seg{display:inline-flex;border:1px solid #141414;box-shadow:3px 3px 0 #141414}
+.seg button{appearance:none;border:0;min-width:110px;min-height:44px;font:500 14px "Pixelify Sans",monospace;background:#faf9f4;color:#141414;cursor:pointer}
+.seg button+button{border-left:1px solid #141414}
+.seg button.on{background:#141414;color:#faf9f4}
+.seg button.on.live{background:#e2552b;color:#141414}
+.cells{display:flex;gap:4px}
+.cells span{width:52px;height:72px;display:grid;place-items:center;font:72px/1 VT323,monospace;border:1px solid #141414;background:#faf9f4}
+.rng{-webkit-appearance:none;appearance:none;width:100%;height:44px;background:transparent;cursor:pointer;margin:0}
+.rng::-webkit-slider-runnable-track{height:12px;border:1px solid #141414;background:repeating-linear-gradient(90deg,#141414 0 1px,#faf9f4 1px 10px)}
+.rng::-webkit-slider-thumb{-webkit-appearance:none;width:16px;height:30px;margin-top:-10px;background:#141414;border:0}
+.rng::-moz-range-track{height:12px;border:1px solid #141414;background:#faf9f4}
+.rng::-moz-range-thumb{width:16px;height:30px;background:#141414;border:0;border-radius:0}
+.shoot{appearance:none;width:100%;min-height:96px;border:4px double #141414;background:#141414;color:#f7f6f1;cursor:pointer;display:flex;align-items:center;justify-content:center;gap:12px;font:400 40px/1 "Instrument Serif",serif;box-shadow:5px 5px 0 #8f9bb0}
+.shoot.live{background:#e2552b;color:#141414;border-color:#141414}
+.shoot:hover{filter:contrast(1.15)}
+.shoot:active{transform:translate(5px,5px);box-shadow:none}
+.runs{width:100%;border-collapse:collapse;font-size:14px}
+.runs th{font:700 12px "Pixelify Sans";letter-spacing:.08em;text-transform:uppercase;text-align:left;padding:8px 12px;border-bottom:1px solid #141414}
+.runs td{padding:6px 12px;border-bottom:1px dashed rgba(20,20,20,.35)}
+.tag{font:18px/1 VT323,monospace;padding:2px 6px;border:1px solid #141414;background:#e2552b;color:#141414}
+@media (prefers-reduced-motion:reduce){*{animation:none!important;transition:none!important}}
+</style>
+</helmet>
+<div class="app" style="display: flex; flex-direction: column">
+<header style="display: flex; flex-wrap: wrap; align-items: center; gap: 14px 22px; padding: 14px 22px; border-bottom: 4px double #141414">
+<span class="chk" aria-hidden="true"></span>
+<span class="serif" style="font-size: 50px; line-height: .9; letter-spacing: -.01em">ComfyDial</span>
+<nav aria-label="Rooms" style="display: flex; flex-wrap: wrap; gap: 6px; margin-left: 8px">
+<a class="room" href="Main.dc.html">Author</a>
+<a class="room on" href="Generate.dc.html" aria-current="page">Generate</a>
+<a class="room" href="Review.dc.html">Review</a>
+</nav>
+<span style="flex: 1"></span>
+<span class="box" style="padding: 6px 10px; font-size: 13px">[ push_in ]</span>
+<span class="box" style="padding: 6px 10px; font-size: 13px">[ {{topText}} ]</span>
+</header>
+
+<div style="display: flex; flex-wrap: wrap; gap: 26px; padding: 26px 22px 22px; align-items: flex-start">
+
+<section class="box mis" aria-label="Shot" style="flex: 1 1 240px; max-width: 280px">
+<div class="bar"><span>The shot</span><span class="rule"></span><span class="x" aria-hidden="true">x</span></div>
+<div style="padding: 16px; display: flex; flex-direction: column; gap: 14px">
+<div style="display: grid; grid-template-columns: auto minmax(0, 1fr); gap: 4px 14px; align-items: baseline">
+<span class="lbl">Name</span><span class="num" style="font-size: 22px">push_in</span>
+<span class="lbl">Length</span><span class="num" style="font-size: 22px">121 F · 4.84 S</span>
+<span class="lbl">Lens</span><span class="num" style="font-size: 22px">35 MM</span>
+<span class="lbl">Frame</span><span class="num" style="font-size: 22px">768×512</span>
+<span class="lbl">Guide</span><span class="num" style="font-size: 22px">DEPTH</span>
+</div>
+<p class="hint" style="border-top: 1px dashed #141414; padding-top: 10px">This is the only room that spends credits.</p>
+<a class="btn" href="Main.dc.html">← Back to Author</a>
+</div>
+</section>
+
+<section aria-label="Prompt" style="flex: 999 1 420px; min-width: 0; display: flex; flex-direction: column; gap: 26px">
+<div class="box dbl mis">
+<div class="bar"><label for="prompt">Prompt</label><span class="rule"></span><span>who · where · what · how it looks</span></div>
+<div style="padding: 14px 18px 16px">
+<textarea id="prompt" class="sheet" rows="4">a woman in a long red coat walks slowly through a stone courtyard at dusk, warm lanterns, light rain on the flagstones</textarea>
+<p class="hint" style="margin-top: 10px">The depth guide gives the shape and the camera move, so leave the camera out of the prompt.</p>
+</div>
+</div>
+<div class="box" style="max-width: 560px">
+<div class="bar"><label for="avoid">Avoid</label><span class="rule"></span></div>
+<div style="padding: 10px 18px 14px"><textarea id="avoid" class="sheet" rows="2">text, watermark, extra people</textarea></div>
+</div>
+</section>
+
+<section class="box mis" aria-label="Takes" style="flex: 1 1 320px; max-width: 380px">
+<div class="bar"><span>Takes</span><span class="rule"></span><span class="x" aria-hidden="true">x</span></div>
+<div style="padding: 18px; display: flex; flex-direction: column; gap: 18px">
+<div style="display: flex; align-items: center; gap: 12px">
+<div class="cells" role="status" aria-label="{{nLabel}}"><span>{{d1}}</span><span>{{d2}}</span></div>
+<div style="display: flex; flex-direction: column; gap: 6px">
+<button class="key" type="button" aria-label="One more take" onClick="{{inc}}">▲</button>
+<button class="key" type="button" aria-label="One fewer take" onClick="{{dec}}">▼</button>
+</div>
+<span class="hint">Live runs<br>cap at 5</span>
+</div>
+<label style="display: flex; flex-direction: column; gap: 2px">
+<span style="display: flex; justify-content: space-between; align-items: baseline"><span class="lbl">Guide strength</span><span class="num" style="font-size: 34px; line-height: 1">{{strengthText}}</span></span>
+<input class="rng" type="range" min="0" max="1" step="0.05" value="{{strength}}" onChange="{{setStrength}}">
+</label>
+<p class="hint" style="margin-top: -10px">Lower gives the prompt more freedom; the camera follows the guide less closely.</p>
+<div role="radiogroup" aria-label="Mode" class="seg">
+<button type="button" role="radio" aria-checked="{{dryChecked}}" class="{{dryCls}}" onClick="{{setDry}}">Dry run</button>
+<button type="button" role="radio" aria-checked="{{liveChecked}}" class="{{liveCls}}" onClick="{{setLive}}">Live</button>
+</div>
+<p class="hint">{{modeHint}}</p>
+<button type="button" class="{{shootCls}}">Shoot {{n}} takes</button>
+</div>
+</section>
+</div>
+
+<section class="box" aria-label="Earlier runs" style="margin: 0 22px 22px">
+<div class="bar"><span>Earlier runs</span><span class="rule"></span><span>open one in Review</span></div>
+<div style="overflow-x: auto; padding: 4px 6px 10px">
+<table class="runs">
+<thead><tr><th scope="col">Shot</th><th scope="col">Mode</th><th scope="col">Takes</th><th scope="col">Held</th><th scope="col">When</th><th scope="col"><span style="position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0 0 0 0)">Open</span></th></tr></thead>
+<tbody>
+<tr><td class="num" style="font-size: 20px">dolly_zoom_5to3</td><td><span class="tag">LIVE</span></td><td class="num" style="font-size: 20px">5</td><td class="num" style="font-size: 20px">5/5</td><td>Oct 24</td><td style="text-align: right"><a class="btn" href="Review.dc.html">Open</a></td></tr>
+<tr><td class="num" style="font-size: 20px">orbit</td><td><span class="tag">LIVE</span></td><td class="num" style="font-size: 20px">5</td><td class="num" style="font-size: 20px">5/5</td><td>Oct 24</td><td style="text-align: right"><a class="btn" href="Review.dc.html">Open</a></td></tr>
+<tr><td class="num" style="font-size: 20px">push_in</td><td><span class="tag">LIVE</span></td><td class="num" style="font-size: 20px">4</td><td class="num" style="font-size: 20px">4/4</td><td>Oct 22</td><td style="text-align: right"><a class="btn" href="Review.dc.html">Open</a></td></tr>
+<tr><td class="num" style="font-size: 20px">push_in (guide off)</td><td><span class="tag">LIVE</span></td><td class="num" style="font-size: 20px">2</td><td class="num" style="font-size: 20px">0/2</td><td>Oct 22</td><td style="text-align: right"><a class="btn" href="Review.dc.html">Open</a></td></tr>
+</tbody>
+</table>
+</div>
+</section>
+</div>
+</x-dc>
+<script type="text/x-dc" data-dc-script data-props='{"$preview":{"width":1440,"height":940}}'>
+class Component extends DCLogic {
+  constructor(props) {
+    super(props);
+    this.state = { n: 4, live: false, strength: 1 };
+  }
+  renderVals() {
+    const { n, live, strength } = this.state;
+    const credits = n * 5 + 1;
+    const padded = String(n).padStart(2, '0');
+    return {
+      n,
+      nLabel: n + ' takes',
+      d1: padded[0],
+      d2: padded[1],
+      strength,
+      strengthText: Number(strength).toFixed(2),
+      inc: () => this.setState({ n: Math.min(live ? 5 : 8, n + 1) }),
+      dec: () => this.setState({ n: Math.max(1, n - 1) }),
+      setStrength: (e) => this.setState({ strength: Number(e.target.value) }),
+      setDry: () => this.setState({ live: false }),
+      setLive: () => this.setState({ live: true, n: Math.min(n, 5) }),
+      dryCls: live ? '' : 'on',
+      liveCls: live ? 'on live' : '',
+      dryChecked: live ? 'false' : 'true',
+      liveChecked: live ? 'true' : 'false',
+      shootCls: live ? 'shoot live' : 'shoot',
+      modeHint: live ? 'Live on Comfy Cloud: about ' + credits + ' credits for ' + n + ' takes plus the pose solve. You confirm before it spends.' : 'Dry run: synthetic poses exercise the pipeline. They are not a measurement of any video.',
+      topText: live ? 'LIVE · about ' + credits + ' credits' : 'DRY · free'
+    };
+  }
+}
+</script>
+</body>
+</html>

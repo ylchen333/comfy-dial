@@ -2,7 +2,7 @@
 import { readFileSync } from "node:fs";
 import { dirname, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
-import { isLtxFrameCount, type ControlPacket, type Shot } from "@comfy-osh/contracts";
+import { isLtxFrameCount, type ControlPacket, type Shot } from "@comfy-dial/contracts";
 import type { Graph } from "./client.ts";
 
 export const WORKFLOWS_DIR = resolve(dirname(fileURLToPath(import.meta.url)), "../../../workflows");
@@ -176,5 +176,15 @@ export function buildActorMeshGraph(p: { imageFile: string; seed: number }): Gra
   const g = loadTemplate("actor_mesh_hunyuan21.api.json");
   patch(g, "1", "LoadImage", { image: p.imageFile });
   patch(g, "7", "KSampler", { seed: p.seed });
+  return g;
+}
+
+/** Optional upscale of a finished take: SeedVR2 (Apache-2.0, local nodes). The camera score is always computed on the original take, never on this. */
+export const UPSCALE_MODEL = "seedvr2_ema_3b_fp16.safetensors";
+export function buildUpscaleGraph(p: { videoFile: string; seed: number; height: number; fps: number }): Graph {
+  const g = loadTemplate("upscale_seedvr2.api.json");
+  patch(g, "1", "LoadVideo", { file: p.videoFile });
+  patch(g, "5", "SeedVR2VideoUpscaler", { seed: p.seed, resolution: p.height });
+  patch(g, "6", "CreateVideo", { fps: p.fps });
   return g;
 }

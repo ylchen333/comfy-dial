@@ -1,7 +1,7 @@
 import { readFileSync } from "node:fs";
 import { fileURLToPath } from "node:url";
 import { describe, expect, it } from "vitest";
-import type { Shot } from "@comfy-osh/contracts";
+import type { Shot } from "@comfy-dial/contracts";
 import { countTriangles, denormalizeDepth, meshBounds, parseGltf, renderClip, type Pose, type Vec3 } from "../src/index.ts";
 import { SceneKit } from "../scripts/scene-kit.ts";
 
@@ -39,6 +39,17 @@ describe("parseGltf", () => {
   });
 });
 
+describe("huangshan set", () => {
+  it("fits the upload budget and puts the stair step under the origin (subject at y = 0.9 stands on it)", () => {
+    const meshes = parseGltf(bundled("huangshan"));
+    expect(countTriangles(meshes)).toBeLessThan(60_000);
+    const s = { resolution: { width: 48, height: 32 }, scene: { nodes: [{ id: "set", asset: "scenes/huangshan.glb", transform: IDENT }] } } as Pick<Shot, "scene" | "resolution">;
+    const down: Pose = { frame: 0, t: 0, position: [0, 5, 0], quaternion: [-Math.SQRT1_2, 0, 0, Math.SQRT1_2], fov_v_deg: 10 };
+    const f = [...renderClip(s, [down], undefined, () => meshes)][0]!;
+    expect(f.depthZ[16 * 48 + 24]).toBeCloseTo(5, 0); // ground at y = 0 within 0.5 m
+  });
+});
+
 describe("mesh nodes in the depth renderer", () => {
   const shot = (transform = IDENT) =>
     ({ resolution: { width: 96, height: 64 }, scene: { nodes: [{ id: "m", asset: "scenes/box.glb", transform }] } }) as Pick<Shot, "scene" | "resolution">;
@@ -73,5 +84,16 @@ describe("mesh nodes in the depth renderer", () => {
     expect(f.depth8.some((v) => v > 0)).toBe(true);
     expect(ms).toBeLessThan(1500); // 121 frames would be ~3 min worst case; measured value is printed below
     console.log(`street frame at 768x512: ${ms.toFixed(0)} ms`);
+  });
+});
+
+import { clipTime } from "../src/index.ts";
+describe("clipTime", () => {
+  const a = { start: 0.04, period: 4.84 }; // a 121-key clip at 25 fps: keys at 0.04 .. 4.84
+  it("starts at the first key, loops, and a 4.8 s shot ends on the last key", () => {
+    expect(clipTime(a, 0)).toBeCloseTo(0.04, 9);
+    expect(clipTime(a, 4.8)).toBeCloseTo(4.84, 9);
+    expect(clipTime(a, 4.84)).toBeCloseTo(0.04, 9);
+    expect(clipTime(a, 5)).toBeCloseTo(0.2, 9);
   });
 });

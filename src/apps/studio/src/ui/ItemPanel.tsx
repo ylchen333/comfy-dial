@@ -1,9 +1,9 @@
 import { useEffect, useState } from "react";
-import type { Vec3 } from "@comfy-osh/rig-core";
+import type { Vec3 } from "@comfy-dial/rig-core";
 import type { Readout } from "../logic/guardrails.ts";
 
 /** One number, committed on Enter or blur (not on every keystroke, so a typed value is one undo step). */
-function Num({ label, value, step = 0.05, onCommit }: { label: string; value: number; step?: number; onCommit: (v: number) => void }) {
+export function Num({ label, value, step = 0.05, onCommit }: { label: string; value: number; step?: number; onCommit: (v: number) => void }) {
   const shown = String(+value.toFixed(3));
   const [text, setText] = useState(shown);
   useEffect(() => setText(shown), [shown]);

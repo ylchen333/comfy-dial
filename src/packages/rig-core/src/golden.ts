@@ -1,5 +1,5 @@
 // Golden clip definitions + per-clip metadata (the true camera path the verifier compares against).
-import type { Shot } from "@comfy-osh/contracts";
+import type { Shot } from "@comfy-dial/contracts";
 import { DEFAULT_SENSOR_HEIGHT_MM, vFovDegToFocalMm, vFovDegToFocalPx } from "./fov.ts";
 import { dolly, dollyZoom } from "./presets.ts";
 import { DEFAULT_DEPTH_NORM, type DepthNormalization } from "./render.ts";
@@ -35,7 +35,7 @@ export interface FrameMeta {
 }
 
 export interface ClipMeta {
-  format: "comfy-osh.golden-clip/1";
+  format: "comfy-dial.golden-clip/1";
   name: string;
   files: { rgb: string; depth: string };
   shotId: string;
@@ -66,7 +66,7 @@ export function buildMeta(name: string, shot: Shot, norm: DepthNormalization = D
     subject_distance: subject ? len(sub(p.position, subject)) : NaN,
   }));
   return {
-    format: "comfy-osh.golden-clip/1",
+    format: "comfy-dial.golden-clip/1",
     name,
     files: { rgb: `${name}.rgb.mp4`, depth: `${name}.depth.mp4` },
     shotId: shot.id,

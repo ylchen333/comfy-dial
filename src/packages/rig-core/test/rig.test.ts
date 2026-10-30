@@ -1,7 +1,7 @@
 import { readFileSync } from "node:fs";
 import { fileURLToPath } from "node:url";
 import { describe, expect, it } from "vitest";
-import { Shot } from "@comfy-osh/contracts";
+import { Shot } from "@comfy-dial/contracts";
 import {
   DEFAULT_DEPTH_NORM, FIXTURE_CLIPS, denormalizeDepth, dolly, dollyZoom, focalMmToVFovDeg, focalPxToVFovDeg,
   len, lookAtQuat, ltxClips, normalizeDepth, orbit, pan, pullOut, pushIn, quatAngleDeg, renderFrame,

@@ -3,5 +3,5 @@
   "2": {"class_type": "GetVideoComponents", "inputs": {"video": ["1", 0]}},
   "3": {"class_type": "LoadDA3Model", "inputs": {"model_name": "depth_anything_3_small.safetensors", "weight_dtype": "default"}},
   "4": {"class_type": "DA3Inference", "inputs": {"da3_model": ["3", 0], "image": ["2", 0], "resolution": 504, "resize_method": "upper_bound_resize", "mode": "multiview", "mode.ref_view_strategy": "saddle_balanced", "mode.pose_method": "cam_dec"}},
-  "5": {"class_type": "ComfyOSH_SaveCameraPosesJSON", "inputs": {"da3_geometry": ["4", 0], "filename_prefix": "poses", "fps": 25.0}}
+  "5": {"class_type": "ComfyDial_SaveCameraPosesJSON", "inputs": {"da3_geometry": ["4", 0], "filename_prefix": "poses", "fps": 25.0}}
 }

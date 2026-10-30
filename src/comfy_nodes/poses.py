@@ -13,7 +13,7 @@ import sys
 
 import numpy as np
 
-SCHEMA = "comfy-osh/poses/1"
+SCHEMA = "comfy-dial/poses/1"
 # 180 deg about X: OpenCV (x right, y down, z fwd) <-> three.js (x right, y up, -z fwd).
 _S = np.diag([1.0, -1.0, -1.0])
 
@@ -54,7 +54,7 @@ def mat_to_quat_xyzw(r: np.ndarray) -> np.ndarray:
 def build_poses(extrinsics, intrinsics, fps: float = 25.0, width: int | None = None,
                 height: int | None = None, source: dict | None = None,
                 indices: list[int] | None = None, stride: int = 1) -> dict:
-    """extrinsics: (S,3,4) w2c; intrinsics: (S,3,3). Returns a comfy-osh/poses/1 document.
+    """extrinsics: (S,3,4) w2c; intrinsics: (S,3,3). Returns a comfy-dial/poses/1 document.
 
     indices: source-clip frame index of each solved frame (default i*stride); t = index / fps.
     """

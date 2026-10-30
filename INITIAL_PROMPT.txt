@@ -1,4 +1,4 @@
-You are the lead engineer for Comfy-OSH. Read SPEC.md and SKILLS.md in this folder before doing anything. SPEC.md is the source of truth. If anything below conflicts with it, SPEC.md wins.
+You are the lead engineer for Comfy-Dial. Read SPEC.md and SKILLS.md in this folder before doing anything. SPEC.md is the source of truth. If anything below conflicts with it, SPEC.md wins.
 
 GOAL
 Build the closed-loop camera director in SPEC.md: author a camera in 3D → LTX generates N takes → measure each take's recovered camera against the authored path → rank → regenerate only failing segments. Deadline: submit Thu Oct 29 (hard cutoff Fri Oct 30, 9am PT).

@@ -1,5 +1,5 @@
 // Client for the local server API (apps/server/src/api.ts). Types mirror RunView/TakeView there; keep them in step.
-import type { Poses, Shot } from "@comfy-osh/contracts";
+import type { Poses, Shot } from "@comfy-dial/contracts";
 import type { SceneListing, UploadInfo } from "./scenes.ts";
 
 export interface TakeView {
@@ -8,6 +8,8 @@ export interface TakeView {
   badSegments: number[]; move: string | null; note: string | null; hasPoses: boolean; hasVideo: boolean;
   segments: { rotDeg: number | null; pass: boolean }[];
   repair: RepairView | null;
+  /** The optional high-resolution copy (SeedVR2). */
+  upscale: { state: "running" | "done" | "error"; height: number; error?: string } | null;
 }
 export interface RepairView {
   segment: number; fromFrame: number; improved: boolean;
@@ -21,7 +23,7 @@ export interface RunView {
   prompt: string | null; negative: string | null;
   repairing: { seed: number; segment: number } | null;
 }
-export interface Health { ok: boolean; liveAvailable: boolean; calibratedResolution: { width: number; height: number }; maxLiveTakes: number; repairCredits: number; referenceCredits: number; actorCredits: number; cloud: boolean }
+export interface Health { ok: boolean; liveAvailable: boolean; calibratedResolution: { width: number; height: number }; maxLiveTakes: number; repairCredits: number; referenceCredits: number; actorCredits: number; upscaleCredits: number; cloud: boolean }
 export interface RunRequest { shot: Shot; n: number; live: boolean; strength: number; prompt?: string; negative?: string; confirmCredits?: number }
 
 type Fetch = typeof fetch;
@@ -39,6 +41,13 @@ export const startRun = (req: RunRequest, f: Fetch = fetch) =>
 
 export const repairTake = (runId: string, seed: number, req: { segment?: number; strength?: number; confirmCredits?: number }, f: Fetch = fetch) =>
   f(`/api/runs/${runId}/takes/${seed}/repair`, { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify(req) }).then((r) => json<RunView>(r));
+
+export const upscaleTake = (runId: string, seed: number, confirmCredits?: number, f: Fetch = fetch) =>
+  f(`/api/runs/${runId}/takes/${seed}/upscale${confirmCredits ? `?confirmCredits=${confirmCredits}` : ""}`, { method: "POST" }).then((r) => json<RunView>(r));
+export const upscaledUrl = (runId: string, seed: number) => `/api/runs/${runId}/takes/${seed}/upscaled`;
+export const upscaledDownloadUrl = (runId: string, seed: number) => `${upscaledUrl(runId, seed)}?download=1`;
+/** "1536x1024" for a 768x512 shot upscaled to height 1024. */
+export const upscaledSize = (res: { width: number; height: number }, height: number) => `${Math.round((res.width * height) / res.height)}x${height}`;
 
 export interface RunListing { id: string; live: boolean; shotId: string; takes: number; modified: number }
 export const listRuns = (f: Fetch = fetch) => f("/api/runs").then((r) => json<RunListing[]>(r));

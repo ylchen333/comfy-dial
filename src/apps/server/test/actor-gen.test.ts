@@ -24,7 +24,7 @@ class ActorStub implements ComfyClient {
   async download(id: string, dir: string) {
     mkdirSync(dir, { recursive: true });
     if (this.jobs.get(id) === "image") { const f = join(dir, "reference_00001_.png"); writeFileSync(f, new Uint8Array(512).fill(7)); return [f]; }
-    const f = join(dir, "comfy_osh_actor_00001_.glb");
+    const f = join(dir, "comfy_dial_actor_00001_.glb");
     copyFileSync(join(BUNDLED_ACTORS_DIR, "mannequin_stand.glb"), f);
     return [f];
   }

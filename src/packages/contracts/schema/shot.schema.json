@@ -1,6 +1,6 @@
 {
   "$schema": "https://json-schema.org/draft/2020-12/schema",
-  "$id": "https://comfy-osh.dev/schema/shot.schema.json",
+  "$id": "https://comfy-dial.dev/schema/shot.schema.json",
   "title": "Shot",
   "description": "An authored camera move. Coordinates are right-handed, Y-up, three.js convention; the camera looks down its local -Z. Cross-field rules not expressible here (enforced by the zod and pydantic mirrors): frames = 1 + 8k; track t strictly increasing and within the clip; segments contiguous, starting at 0 and ending at frames; quaternions unit length.",
   "type": "object",

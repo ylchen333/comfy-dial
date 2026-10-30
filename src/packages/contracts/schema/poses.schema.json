@@ -1,13 +1,13 @@
 {
   "$schema": "https://json-schema.org/draft/2020-12/schema",
-  "$id": "https://comfy-osh.dev/schema/poses.schema.json",
+  "$id": "https://comfy-dial.dev/schema/poses.schema.json",
   "title": "Poses",
   "description": "Camera poses recovered from a generated take (e.g. Depth Anything 3), one entry per solved frame. Same convention as Shot after conversion: right-handed, Y-up, three.js; the camera looks down its local -Z; position is the camera centre and quaternion the camera-to-world rotation. World origin is the first solved camera and scale is arbitrary, so only Sim(3)-aligned comparison is meaningful. Frames may be a subset of the clip: t is seconds from clip start and the verifier interpolates onto the Shot's frame times. Cross-field rules not expressible here (enforced by the zod and pydantic mirrors): index and t strictly increasing; quaternions unit length; frames non-empty when solve_ok is true.",
   "type": "object",
   "additionalProperties": false,
   "required": ["schema", "fps", "image", "solve_ok", "frames"],
   "properties": {
-    "schema": { "const": "comfy-osh/poses/1" },
+    "schema": { "const": "comfy-dial/poses/1" },
     "fps": { "description": "Frame rate of the clip the poses were recovered from.", "type": "number", "exclusiveMinimum": 0 },
     "image": {
       "description": "Pixel size the intrinsics refer to (the model's processed size, not necessarily the clip's).",

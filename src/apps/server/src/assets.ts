@@ -3,8 +3,8 @@
 import { createHash } from "node:crypto";
 import { copyFileSync, existsSync, mkdirSync, readFileSync, readdirSync, writeFileSync } from "node:fs";
 import { join, resolve } from "node:path";
-import { countTriangles, isPrimitiveAsset, meshBounds, parseGltf, type Mesh, type MeshResolver, type Vec3 } from "@comfy-osh/rig-core";
-import type { Shot } from "@comfy-osh/contracts";
+import { countTriangles, isPrimitiveAsset, loadGltf, meshBounds, parseGltf, type GltfModel, type Mesh, type MeshResolver, type Vec3 } from "@comfy-dial/rig-core";
+import type { Shot } from "@comfy-dial/contracts";
 import { SRC_DIR } from "./tools.ts";
 
 export const BUNDLED_SCENES_DIR = resolve(SRC_DIR, "assets/scenes");
@@ -48,11 +48,11 @@ export class AssetStore {
   listActors(): SceneListing[] {
     if (!existsSync(this.actorsDir)) return [];
     return readdirSync(this.actorsDir)
-      .filter((f) => /^mannequin_(stand|stride)\.glb$/.test(f))
+      .filter((f) => /^(mannequin_(stand|stride)|dancing_baby)\.glb$/.test(f))
       .sort()
       .map((f) => {
         const id = f.replace(/\.glb$/, "");
-        return { id, label: id === "mannequin_stand" ? "Mannequin, standing" : "Mannequin, mid-stride", asset: `actors/${f}` };
+        return { id, label: id === "mannequin_stand" ? "Mannequin, standing" : id === "dancing_baby" ? "Dancing baby" : "Mannequin, mid-stride", asset: `actors/${f}` };
       });
   }
 
@@ -95,17 +95,30 @@ export class AssetStore {
     return { asset: `uploads/${name}`, triangles, min, max };
   }
 
-  /** The renderer's resolver (parsed meshes are cached for the life of the store). */
-  resolver(): MeshResolver {
-    return (asset) => {
-      const hit = this.cache.get(asset);
-      if (hit) return hit;
+  private readonly models = new Map<string, GltfModel>();
+
+  private model(asset: string): GltfModel {
+    let m = this.models.get(asset);
+    if (!m) {
       const file = this.fileFor(asset);
       if (!file) throw new Error(`scene asset ${asset} not found (expected scenes/<file>.glb or uploads/<file>.glb)`);
-      const meshes = parseGltf(new Uint8Array(readFileSync(file)));
+      m = loadGltf(new Uint8Array(readFileSync(file)));
+      this.models.set(asset, m);
+    }
+    return m;
+  }
+
+  /** The renderer's resolver (parsed models are cached for the life of the store). Assets with a node animation are posed per frame by the renderer. */
+  resolver(): MeshResolver {
+    const r: MeshResolver = (asset) => {
+      const hit = this.cache.get(asset);
+      if (hit) return hit;
+      const meshes = this.model(asset).meshesAt();
       this.cache.set(asset, meshes);
       return meshes;
     };
+    r.animated = (asset) => (isPrimitiveAsset(asset) ? null : this.model(asset));
+    return r;
   }
 
   /** Content hash of every non-primitive asset a Shot uses, so a changed file never reuses a cached guide. */
@@ -115,7 +128,7 @@ export class AssetStore {
       if (isPrimitiveAsset(n.asset)) continue;
       const file = this.fileFor(n.asset);
       h.update(n.asset);
-      if (file) h.update(readFileSync(file));
+      if (file) { h.update(readFileSync(file)); if (this.model(n.asset).animation) h.update("animated-v1"); } // rendering changed for animated files: never reuse an older static guide
     }
     return h.digest("hex");
   }

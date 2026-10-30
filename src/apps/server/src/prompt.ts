@@ -1,5 +1,5 @@
 // Prompt text for the LTX graphs: defaults, and the one place user text is cleaned and bounded.
-export const DEFAULT_PROMPT = "A cinematic shot of a single subject in a room, soft natural light, smooth steady camera motion.";
+export const DEFAULT_PROMPT = "A happy baby in a small red cloth wrap dances on a stone stair high in the Huangshan mountains, tiny arms swaying and feet stepping to a rhythm. Beside the baby a lone swordsman in black and white ink-wash robes stands guard. A gentle mountain wind blows: robes and sleeves flutter, pine branches sway, and a sea of mist drifts between the granite spires. Soft overcast morning light, muted ink-painting palette, cinematic, realistic fabric motion."; // the demo prompt, kept in step with studio/src/logic/prompts.ts
 /** The negative text the validated graph shipped with. */
 export const DEFAULT_NEGATIVE = "pc game, console game, video game, cartoon, childish, ugly";
 export const MAX_PROMPT = 600;

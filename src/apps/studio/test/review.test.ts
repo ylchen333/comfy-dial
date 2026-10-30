@@ -25,3 +25,11 @@ describe("review logic", () => {
     expect(frameAtTime(99, 25, 121)).toBe(120);
   });
 });
+
+import { upscaledSize } from "../src/logic/runs.ts";
+describe("upscaledSize", () => {
+  it("scales the shot's size to the target height, keeping the aspect ratio", () => {
+    expect(upscaledSize({ width: 768, height: 512 }, 1024)).toBe("1536x1024");
+    expect(upscaledSize({ width: 1120, height: 480 }, 960)).toBe("2240x960");
+  });
+});

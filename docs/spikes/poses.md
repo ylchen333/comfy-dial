@@ -8,7 +8,7 @@ Cloud prompt `d9dc63dc-d616-4e5c-b42f-705ed0569001` completed in 11.7 s (17 fram
 | Path | Graph | Where | Status |
 |---|---|---|---|
 | Cloud (A) | `LoadVideo > GetVideoComponents > DownloadAndLoadDepthAnythingV3Model(da3_small) > DepthAnythingV3_MultiView` outputs `extrinsics`, `intrinsics` (STRING, JSON) `> SaveText` (core, `.txt`) x2 | `src/workflows/da3_poses.api.json` | Verified |
-| Local (B) | `LoadDA3Model > DA3Inference(multiview) > ComfyOSH_SaveCameraPosesJSON` | `src/workflows/da3_poses_local.api.json`, node in `src/comfy_nodes/` | Node unit-tested; not run inside ComfyUI (no local install with DA3 weights) |
+| Local (B) | `LoadDA3Model > DA3Inference(multiview) > ComfyDial_SaveCameraPosesJSON` | `src/workflows/da3_poses_local.api.json`, node in `src/comfy_nodes/` | Node unit-tested; not run inside ComfyUI (no local install with DA3 weights) |
 
 Cloud flow: `comfy upload clip.mp4 --where cloud`, put the returned `cloud_name` in node 1, `comfy run --workflow ... --where cloud --json`, `comfy jobs wait <id> --where cloud`, `comfy download <id> --where cloud` (files land in `outputs/<id8>_001.txt` = extrinsics, `_002.txt` = intrinsics). Then convert:
 `uv run python comfy_nodes/poses.py <extrinsics.txt> <intrinsics.txt> poses.json [fps]` (or import `build_poses`).
@@ -33,14 +33,14 @@ Let `S = diag(1,-1,-1)` (180 deg about X; flips y and z).
 Consequences: forward dolly goes toward -Z; OpenCV "down" becomes -Y. DA3 world "up" is camera 0's up, not gravity, so a camera that starts pitched gives a tilted world. Verifier must Sim(3)-align (rotation included) before comparing to the authored path.
 Implemented in `src/comfy_nodes/poses.py` (`w2c_to_threejs_c2w`), tested in `src/comfy_nodes/tests/test_poses.py` (identity, dolly, down axis, yaw).
 
-## poses.json shape (`comfy-osh/poses/1`)
+## poses.json shape (`comfy-dial/poses/1`)
 
-`{schema, fps, image{width,height}, solve_ok, convention{...}, source{...}, frames[{index, t, position[3], quaternion[4 xyzw], fov_v_deg, fx, fy, cx, cy}]}`. Validates with `comfy_osh_contracts.Poses` (`schema/poses.schema.json`). `t = index / fps` (seconds from clip start); `index` is the source-clip frame index, so strided solves carry `index = i*stride`. Quaternions are not rounded (unit to 1e-6). CLI: `poses.py ext.txt int.txt out.json [fps=25] [stride=1]`.
+`{schema, fps, image{width,height}, solve_ok, convention{...}, source{...}, frames[{index, t, position[3], quaternion[4 xyzw], fov_v_deg, fx, fy, cx, cy}]}`. Validates with `comfy_dial_contracts.Poses` (`schema/poses.schema.json`). `t = index / fps` (seconds from clip start); `index` is the source-clip frame index, so strided solves carry `index = i*stride`. Quaternions are not rounded (unit to 1e-6). CLI: `poses.py ext.txt int.txt out.json [fps=25] [stride=1]`.
 Field names match Shot keyframes.
 
 ## Gotchas
 
-- Tested Oct 18: Comfy Cloud rejects the unpublished `ComfyOSH_SaveCameraPosesJSON` as `unknown_class_type`, while the pack workflow validates. Untested whether publishing the pack to the Registry changes this.
+- Tested Oct 18: Comfy Cloud rejects the unpublished `ComfyDial_SaveCameraPosesJSON` as `unknown_class_type`, while the pack workflow validates. Untested whether publishing the pack to the Registry changes this.
 
 - Core `DA3Inference` returns `DA3_GEOMETRY` only; no core node reads extrinsics. The pack node `DepthAnythingV3_MultiView` returns them as strings (Cloud only has it via the ComfyUI-DepthAnythingV3 pack).
 - Pack loader `DownloadAndLoadDepthAnythingV3Model` defaults to `da3_large` and lists large/giant/metric; **set `da3_small` or `da3_base` explicitly.** Core `LoadDA3Model` also lists `mono_large` and `metric_large`; use only `depth_anything_3_small|base`.

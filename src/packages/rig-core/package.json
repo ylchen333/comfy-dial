@@ -1,5 +1,5 @@
 {
-  "name": "@comfy-osh/rig-core",
+  "name": "@comfy-dial/rig-core",
   "private": true,
   "type": "module",
   "exports": {
@@ -12,6 +12,6 @@
     "build:scenes": "node --experimental-strip-types scripts/build-scenes.ts"
   },
   "dependencies": {
-    "@comfy-osh/contracts": "workspace:*"
+    "@comfy-dial/contracts": "workspace:*"
   }
 }

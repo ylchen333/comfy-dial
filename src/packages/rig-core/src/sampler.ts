@@ -2,7 +2,7 @@
 // Frame i is sampled at t = i / fps. Before the first / after the last key the pose is held.
 // Position: linear. Orientation: shortest-arc slerp. Zoom: linear in focal length (cot(fov/2)),
 // which is what makes a linear dolly + linear focal ramp an exact dolly zoom.
-import type { Shot } from "@comfy-osh/contracts";
+import type { Shot } from "@comfy-dial/contracts";
 import { lerp3, quatNormalize, slerp, type Quat, type Vec3 } from "./math.ts";
 
 export interface Pose {

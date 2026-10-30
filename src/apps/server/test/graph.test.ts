@@ -20,8 +20,8 @@ describe("buildTakeGraph", () => {
     expect(g2["16"]!.inputs.noise_seed).toBe(1);
     expect(g["16"]!.inputs.noise_seed).toBe(77);
   });
-  it("uses only pack/core nodes, no custom ComfyOSH node and no partner nodes", () => {
-    for (const n of Object.values(g)) expect(n.class_type).not.toMatch(/ComfyOSH|LtxApi/);
+  it("uses only pack/core nodes, no custom ComfyDial node and no partner nodes", () => {
+    for (const n of Object.values(g)) expect(n.class_type).not.toMatch(/ComfyDial|LtxApi/);
   });
   it("allows strength 0 only with allowUnguided (negative control)", () => {
     const g0 = buildTakeGraph({ shot, packet: packetFor(shot, 0), guideFile: "a", prompt: "p", seed: 1, allowUnguided: true });

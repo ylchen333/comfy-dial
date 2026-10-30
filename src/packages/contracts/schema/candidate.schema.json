@@ -1,6 +1,6 @@
 {
   "$schema": "https://json-schema.org/draft/2020-12/schema",
-  "$id": "https://comfy-osh.dev/schema/candidate.schema.json",
+  "$id": "https://comfy-dial.dev/schema/candidate.schema.json",
   "title": "Candidate",
   "description": "One generated take. Save idempotencyKey -> jobId before awaiting the job (SDK rejects duplicate keys with 422).",
   "type": "object",

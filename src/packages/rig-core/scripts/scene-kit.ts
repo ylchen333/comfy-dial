@@ -81,7 +81,7 @@ export class SceneKit {
     let p = 0;
     for (const c of chunks) { bin.set(c, p); p += c.byteLength; }
     const json = {
-      asset: { version: "2.0", generator: "comfy-osh scene-kit" },
+      asset: { version: "2.0", generator: "comfy-dial scene-kit" },
       scene: 0, scenes: [{ nodes: [0] }], nodes: [{ mesh: 0, ...node }], meshes: [{ primitives }],
       materials, accessors, bufferViews: views, buffers: [{ byteLength: bin.byteLength }],
     };

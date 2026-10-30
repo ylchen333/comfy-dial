@@ -148,7 +148,7 @@ const poseFrame = z.strictObject({
 });
 export const Poses = z
   .strictObject({
-    schema: z.literal("comfy-osh/poses/1"),
+    schema: z.literal("comfy-dial/poses/1"),
     fps: z.number().gt(0),
     image: z.strictObject({ width: z.number().int().min(1), height: z.number().int().min(1) }),
     solve_ok: z.boolean(),

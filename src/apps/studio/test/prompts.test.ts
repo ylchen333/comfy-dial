@@ -21,3 +21,22 @@ describe("prompt helpers", () => {
     expect(promptProblem(" ".repeat(900), "")).toBeNull();
   });
 });
+
+import { DEFAULT_PROMPT, DEMO_PROMPT, MAX_PROMPT as MAXP, PROMPT_EXAMPLES as EX, cameraWords as cw } from "../src/logic/prompts.ts";
+describe("demo prompt", () => {
+  it("fits the limit, has no camera words, is the default and the first example", () => {
+    expect(DEMO_PROMPT.length).toBeLessThanOrEqual(MAXP);
+    expect(cw(DEMO_PROMPT)).toEqual([]);
+    expect(DEFAULT_PROMPT).toBe(DEMO_PROMPT);
+    expect(EX[0]!.text).toBe(DEMO_PROMPT);
+  });
+});
+
+import { HERO_PROMPT } from "../src/logic/prompts.ts";
+describe("demo prompts", () => {
+  it("both Huangshan prompts fit, avoid camera words, and the baby prompt is the default", () => {
+    for (const t of [DEMO_PROMPT, HERO_PROMPT]) { expect(t.length).toBeLessThanOrEqual(MAXP); expect(cw(t)).toEqual([]); }
+    expect(DEMO_PROMPT).toMatch(/baby/i);
+    expect(EX[1]!.text).toBe(HERO_PROMPT);
+  });
+});

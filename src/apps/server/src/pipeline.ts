@@ -2,7 +2,7 @@
 // wait -> download -> decimate -> DA3 job -> Poses JSON -> verifier -> ScoreReport.
 import { existsSync, mkdirSync, readFileSync, readdirSync, writeFileSync } from "node:fs";
 import { basename, join } from "node:path";
-import { Poses, ScoreReport, type ControlPacket, type Shot } from "@comfy-osh/contracts";
+import { Poses, ScoreReport, type ControlPacket, type Shot } from "@comfy-dial/contracts";
 import { isTransientError, type ComfyClient, type Graph } from "./client.ts";
 import { buildPoseGraph, buildSegmentGraph, buildTakeGraph, SEGMENT_CONTEXT_FRAMES, segmentWindow } from "./graph.ts";
 import { moveCheck, rankTakes, verdict, type Ranked, type TableRow } from "./rank.ts";
@@ -157,7 +157,7 @@ async function chain(
       // An unusable solve (e.g. zero frames) is a failed solve scored by the verifier, never a dropped take.
       void e;
       log(`  ${id}: pose conversion produced no usable solve; recording solve_ok=false`);
-      writeFileSync(posesPath, JSON.stringify({ schema: "comfy-osh/poses/1", fps: o.shot.fps, image: o.shot.resolution, solve_ok: false, frames: [] }));
+      writeFileSync(posesPath, JSON.stringify({ schema: "comfy-dial/poses/1", fps: o.shot.fps, image: o.shot.resolution, solve_ok: false, frames: [] }));
     }
     const posesDoc = Poses.parse(JSON.parse(readFileSync(posesPath, "utf8"))); // throws if the conversion output drifts from the contract
     const report = await o.tools.score(o.shotPath, posesPath, id);

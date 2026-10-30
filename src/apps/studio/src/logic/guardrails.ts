@@ -1,6 +1,6 @@
 // Authoring readouts and checks (no UI). Every check is tied to something we measured or to the verifier's own rules
 // (SPEC section 6, docs/calibration.md); none is a guessed speed or taste limit.
-import { FPS, quatAngleDeg, quatToMat3, type Pose, type Quat, type Vec3 } from "@comfy-osh/rig-core";
+import { FPS, quatAngleDeg, quatToMat3, type Pose, type Quat, type Vec3 } from "@comfy-dial/rig-core";
 import type { DepthStats } from "./depthPreview.ts";
 import { focalToFov } from "./lens.ts";
 

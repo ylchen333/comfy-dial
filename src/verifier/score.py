@@ -8,7 +8,7 @@ but keeps it out of pass/composite.
 import json
 
 import numpy as np
-from comfy_osh_contracts import Poses, ScoreReport, SegmentScore
+from comfy_dial_contracts import Poses, ScoreReport, SegmentScore
 from pydantic import ValidationError
 
 from .geom import qangle_deg, qconj, qmul, quat_to_mat

@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
-import type { Poses } from "@comfy-osh/contracts";
-import { FPS, sampleShot } from "@comfy-osh/rig-core";
+import type { Poses } from "@comfy-dial/contracts";
+import { FPS, sampleShot } from "@comfy-dial/rig-core";
 import { exportShot } from "../logic/compile.ts";
 import { canRedo, canUndo, commit, createHistory, redo, undo, type History } from "../logic/history.ts";
 import { alignRecovered } from "../logic/align.ts";
@@ -10,8 +10,8 @@ import {
 } from "../logic/keys.ts";
 import { ASPECT_PRESETS, SENSOR_PRESETS, aspectIdOf, focalToFov } from "../logic/lens.ts";
 import { PRESET_IDS, PRESET_LABELS, applyPreset } from "../logic/presets.ts";
-import { getActors, getHealth, type GeneratedActor, getRun, getScenes, listRuns, repairTake, uploadModel, type RunListing, type RunView, type TakeView } from "../logic/runs.ts";
-import { ACTOR_STAND, BLOCKING_SCENE_ID, SUBJECT_BOX, addModel, blockingScene, bundledScene, keepSubject, modelNodes, removeNode, sceneIdOf, subjectAssetOf, withScene, withSubject, type SceneListing } from "../logic/scenes.ts";
+import { getActors, getHealth, type GeneratedActor, getRun, getScenes, listRuns, repairTake, upscaleTake, uploadModel, type RunListing, type RunView, type TakeView } from "../logic/runs.ts";
+import { ACTOR_STAND, BLOCKING_SCENE_ID, SUBJECT_BOX, addModel, blockingScene, bundledScene, keepSubject, modelNodes, removeNode, sceneIdOf, subjectAssetOf, withActorProp, withScene, withSubject, type SceneListing } from "../logic/scenes.ts";
 import type { Channel, Easing, Result, StudioDoc } from "../logic/types.ts";
 import { ReferencePanel } from "./ReferencePanel.tsx";
 import { GeneratePage } from "./GeneratePage.tsx";
@@ -24,6 +24,8 @@ import { frameReadout, shotChecks } from "../logic/guardrails.ts";
 import { framingOf, snapPoint, viewKey, type Framing, type ViewId } from "../logic/viewControls.ts";
 import { jumpKey, keyFrames } from "../logic/timeNav.ts";
 import { ActorPanel } from "./ActorPanel.tsx";
+import { ObjectPanel, type TransformMode } from "./ObjectPanel.tsx";
+import { canRemoveNode, duplicateNode, editableNodes, updateNode } from "../logic/sceneEdit.ts";
 import { ItemPanel } from "./ItemPanel.tsx";
 import { Menu, MenuItem } from "./Menu.tsx";
 import { Timeline, type SelectedKey } from "./Timeline.tsx";
@@ -57,12 +59,20 @@ const readFile = (accept: string, cb: (text: string) => void) => {
   input.click();
 };
 
+/** The demo opens on the Huangshan set with the ink-robed swordsman standing on the stairs. */
+const DEMO_SET = "scenes/huangshan.glb";
+const DEMO_HERO = /swordsman/i;
+const DEMO_BABY = "actors/dancing_baby.glb";
+const DEMO_BABY_AT: [number, number, number] = [-0.8, 0, 0.2]; // beside the hero, on the same step
+
 export function App() {
-  const [hist, setHist] = useState<History>(() => createHistory(withSubject(newDoc(), ACTOR_STAND)));
+  const [hist, setHist] = useState<History>(() => createHistory(withActorProp(withSubject(withScene(newDoc(), bundledScene(DEMO_SET)), ACTOR_STAND), "baby", DEMO_BABY, DEMO_BABY_AT)));
   const doc = hist.present;
   const [frame, setFrame] = useState(0);
   const [playing, setPlaying] = useState(false);
   const [selected, setSelected] = useState<SelectedKey | null>(null);
+  const [selNode, setSelNode] = useState<string | null>(null);
+  const [tmode, setTmode] = useState<TransformMode>("translate");
   const [gizmo, setGizmo] = useState<GizmoTarget>("position");
   const [showPip, setShowPip] = useState(true);
   const [messages, setMessages] = useState<string[]>([]);
@@ -72,6 +82,7 @@ export function App() {
   const [actors, setActors] = useState<SceneListing[]>([]);
   const [made, setMade] = useState<GeneratedActor[]>([]);
   const [repairCredits, setRepairCredits] = useState(13);
+  const [upscaleCredits, setUpscaleCredits] = useState<number | null>(20);
   const [reviewSeed, setReviewSeed] = useState<number | null>(null);
   const [page, setPageState] = useState<Page>(() => pageFromHash(window.location.hash));
   const goPage = useCallback((p: Page) => {
@@ -113,7 +124,7 @@ export function App() {
     if (!id) return;
     getRun(id).then((v) => { setRun(v); if (v.takes.length) setReviewSeed(v.takes[0]!.seed); goPage("review"); }).catch((e: Error) => setMessages([`could not load run ${id}: ${e.message}`]));
   }, [goPage]);
-  useEffect(() => { getHealth().then((h) => setRepairCredits(h.repairCredits)).catch(() => {}); }, []);
+  useEffect(() => { getHealth().then((h) => { setRepairCredits(h.repairCredits); setUpscaleCredits(h.cloud ? h.upscaleCredits : null); }).catch(() => {}); }, []);
   // Poll a running run here (not in RunPanel, which unmounts when you leave the Generate page).
   const runningId = run?.state === "running" ? run.id : null;
   useEffect(() => {
@@ -128,7 +139,19 @@ export function App() {
     const t = window.setInterval(() => { getRun(repairingId).then((v) => { setRun(v); if (!v.repairing && v.takes.length) { setRecoveredDoc(null); } }).catch(() => {}); }, 1500);
     return () => window.clearInterval(t);
   }, [repairingId]);
-  useEffect(() => { getScenes().then(setScenes).catch(() => setScenes([])); getActors().then((l) => { setActors(l.bundled); setMade(l.generated); }).catch(() => { setActors([]); setMade([]); }); }, []);
+  // An upscale also runs after the run finished: poll while any take is being upscaled.
+  const upscalingId = run?.takes.some((t) => t.upscale?.state === "running") ? run.id : null;
+  useEffect(() => {
+    if (!upscalingId) return;
+    const t = window.setInterval(() => { getRun(upscalingId).then(setRun).catch(() => {}); }, 2000);
+    return () => window.clearInterval(t);
+  }, [upscalingId]);
+  useEffect(() => { getScenes().then(setScenes).catch(() => setScenes([])); getActors().then((l) => {
+      setActors(l.bundled); setMade(l.generated);
+      // Demo default: the ink-robed swordsman, if this machine has generated one. Not bundled (Hunyuan3D outputs stay local), so a fresh checkout keeps the mannequin.
+      const hero = l.generated.find((a) => DEMO_HERO.test(a.description));
+      if (hero) setHist((h) => (h.past.length === 0 && subjectAssetOf(h.present) === ACTOR_STAND ? { ...h, present: withSubject(h.present, hero.asset) } : h));
+    }).catch(() => { setActors([]); setMade([]); }); }, []);
 
   const poses = useMemo(() => sampleShot(exportShot(doc)), [doc]);
   const validation = useMemo(() => validateDoc(doc), [doc]);
@@ -207,6 +230,13 @@ export function App() {
       if (page !== "author") return; // Review owns its own keys; Generate has none
       if (isTyping(e.target)) return;
       if (grab) return; // the grab controller owns the keyboard until it ends
+      if (selNode && !e.metaKey && !e.ctrlKey && !e.altKey) {
+        const k = e.key.toLowerCase();
+        if (k === "w") { e.preventDefault(); setTmode("translate"); return; }
+        if (k === "e") { e.preventDefault(); setTmode("rotate"); return; }
+        if (k === "r") { e.preventDefault(); setTmode("scale"); return; }
+        if (e.key === "Escape") { e.preventDefault(); setSelNode(null); return; }
+      }
       const mod = e.metaKey || e.ctrlKey;
       const vk = viewKey(e);
       if (mod && e.key.toLowerCase() === "z") {
@@ -242,6 +272,10 @@ export function App() {
         e.preventDefault();
         setPlaying(false);
         setFrame((f) => jumpKey(keyFrames(doc), f, e.key === "ArrowUp" ? 1 : -1));
+      } else if ((e.key === "Delete" || e.key === "Backspace") && selNode) {
+        e.preventDefault();
+        if (canRemoveNode(selNode)) { const id = selNode; edit((d) => removeNode(d, id)); setSelNode(null); setMessages([]); }
+        else setMessages([selNode === "subject" ? "The subject can't be deleted: presets aim the camera at it. Pick another one under Scene, Subject." : `${selNode} can't be deleted.`]);
       } else if ((e.key === "Delete" || e.key === "Backspace") && selected) {
         edit((d) => deleteKey(d, selected.ch, selected.frame));
         setSelected(null);
@@ -252,7 +286,7 @@ export function App() {
     window.addEventListener("keydown", onKey);
     window.addEventListener("keyup", onUp);
     return () => { window.removeEventListener("keydown", onKey); window.removeEventListener("keyup", onUp); };
-  }, [selected, edit, page, lastFrame, goPage, doc, lens, grab, frame, orthoAuto]);
+  }, [selected, selNode, edit, page, lastFrame, goPage, doc, lens, grab, frame, orthoAuto]);
 
   /** G: grab the selected position key (or the key at this frame) and move it with the mouse. */
   const startGrab = () => {
@@ -306,6 +340,10 @@ export function App() {
       .then(setRun)
       .catch((e: Error) => setMessages([e.message]));
   };
+  const upscale = (t: TakeView) => {
+    if (!run) return;
+    upscaleTake(run.id, t.seed, upscaleCredits ?? undefined).then(setRun).catch((e: Error) => setMessages([e.message]));
+  };
   const sceneId = sceneIdOf(doc, scenes);
   const chooseScene = (id: string) => {
     const listing = scenes.find((l) => l.id === id);
@@ -329,7 +367,7 @@ export function App() {
 
   return (
     <div className="app">
-      <TopBar page={page} onPage={goPage} canReview={Boolean(goReview)} />
+      <TopBar page={page} onPage={goPage} canReview={Boolean(goReview)} shotId={doc.id} run={run} />
       {page === "author" && (
         <div className="page author">
           <header className="pagehead">
@@ -349,9 +387,13 @@ export function App() {
             </ul>
           )}
           <main>
-            <aside className="panel">
+            <aside className="panel left" aria-label="View and moves">
           <section>
-            <h3>Move presets</h3>
+            <h3>View</h3>
+            <p className="rot-hint">Rotate the scene: <b>Alt + drag</b> (<b>Option + drag</b> on Mac). Middle mouse also orbits; scroll zooms.</p>
+          </section>
+          <section>
+            <h3>Moves</h3>
             <div className="row wrap">
               {PRESET_IDS.map((id) => (
                 <button key={id} onClick={() => { edit((d) => applyPreset(d, id)); setSelected(null); setFrame(0); }}>{PRESET_LABELS[id]}</button>
@@ -367,6 +409,102 @@ export function App() {
             </div>
             <p className="hint mono">cam {pose.position.map((v) => v.toFixed(2)).join(", ")}</p>
           </section>
+            </aside>
+
+        <div className="vp-col">
+          <div className="vp-header" role="toolbar" aria-label="Viewport">
+            <div className="seg2" title="Editor view, or look through the shot camera (0)">
+              <button type="button" className={!lens ? "on" : ""} onClick={() => setLens(false)}>Editor</button>
+              <button type="button" className={lens ? "on" : ""} onClick={() => setLens(true)}>Camera</button>
+            </div>
+            <Menu label="View" title="Standard views (1 front, 3 right, 7 top; Shift for the opposite side)">
+              <MenuItem label="Front" keys="1" onClick={() => viewTo("front")} />
+              <MenuItem label="Back" keys="Shift 1" onClick={() => viewTo("back")} />
+              <MenuItem label="Right" keys="3" onClick={() => viewTo("side")} />
+              <MenuItem label="Left" keys="Shift 3" onClick={() => viewTo("left")} />
+              <MenuItem label="Top" keys="7" onClick={() => viewTo("top")} />
+              <MenuItem label="Bottom" keys="Shift 7" onClick={() => viewTo("bottom")} />
+              <hr />
+              <MenuItem label={ortho ? "Switch to perspective" : "Switch to orthographic"} keys="5" onClick={() => { if (!lens) { setOrtho((o) => !o); setOrthoAuto(false); } }} />
+              <MenuItem label="Camera view" keys="0" onClick={() => setLens((v) => !v)} />
+              <hr />
+              <MenuItem label="Frame all" keys="Home" onClick={() => { setLens(false); sendView("frame"); }} />
+              <MenuItem label="Frame selected key" keys="." onClick={frameSelected} />
+            </Menu>
+            <div className="seg2" title="Viewport shading (D or Z). Depth shows what the model's depth guide contains.">
+              <button type="button" className={!depth ? "on" : ""} onClick={() => setDepth(false)}>Solid</button>
+              <button type="button" className={depth ? "on" : ""} onClick={() => setDepth(true)}>Depth</button>
+            </div>
+            <Menu label="Overlays">
+              {([["grid", "Grid"], ["frustum", "Camera frustum"], ["path", "Camera path and keys"], ["ghosts", "Ghost cameras (every 20 frames)"]] as const).map(([k, label]) => (
+                <label key={k} className="mi chk"><input type="checkbox" checked={overlays[k]} onChange={(e) => setOverlays({ ...overlays, [k]: e.target.checked })} /> {label}</label>
+              ))}
+              <label className="mi chk"><input type="checkbox" checked={guides} onChange={(e) => setGuides(e.target.checked)} /> Composition guides (camera view)</label>
+              <label className="mi chk"><input type="checkbox" checked={showPip} onChange={(e) => setShowPip(e.target.checked)} /> Shot camera inset</label>
+            </Menu>
+            <label title="Snap dragged points to 0.25 m and keep them above the ground"><input type="checkbox" checked={snap} onChange={(e) => setSnap(e.target.checked)} /> Snap</label>
+            <span className="spacer" />
+            {selNode && canRemoveNode(selNode) && (
+              <button type="button" onClick={() => { edit((d) => removeNode(d, selNode)); setSelNode(null); }} title={`Delete ${selNode} (Delete)`}>Delete {selNode}</button>
+            )}
+            <button type="button" className={npanel ? "on" : ""} onClick={() => setNpanel((v) => !v)} title="Numbers for the shot camera at this frame (N)">Item</button>
+          </div>
+          <div className="viewport">
+            <Viewport
+              doc={doc}
+              frame={frame}
+              poses={poses}
+              recovered={recovered}
+              gizmo={gizmo}
+              showPip={showPip}
+              lens={lens}
+              ortho={ortho}
+              shading={depth ? "depth" : "solid"}
+              overlays={overlays}
+              viewCmd={viewCmd}
+              framing={framing}
+              snap={snap}
+              grab={grab}
+              onGrabPreview={(i) => setGrabInfo(i ? { axis: i.axis } : null)}
+              onGrabEnd={(f, pos) => { setGrab(null); setGrabInfo(null); if (pos) edit((d) => upsertKey(d, "position", f, pos)); }}
+              onUserOrbit={() => { if (orthoAuto) { setOrtho(false); setOrthoAuto(false); } }}
+              onViewLabel={setViewLabel}
+              selectedKeyFrame={selected?.ch === "position" ? selected.frame : null}
+              onSelectKey={(f) => { setSelected({ ch: "position", frame: f }); setSelNode(null); }}
+              selectedNode={selNode} transformMode={tmode}
+              onSelectNode={(id) => { setSelNode(id); if (id) setSelected(null); }}
+              onNodeCommit={(id, t) => edit((d) => updateNode(d, id, t))}
+              onKeyMove={(f, v) => edit((d) => upsertKey(d, "position", f, snapPoint(v, { on: snap })))}
+              onGizmoCommit={(target, value) => edit((d) => upsertKey(d, target, frame, snapPoint(value, { on: snap })))}
+              onAssetError={(m) => setMessages([m])}
+            />
+            {lens
+              ? <LensOverlay aspect={doc.resolution.width / doc.resolution.height} resolution={doc.resolution} frame={frame} focalMm={focal} guides={guides} depth={depth} image={depthImg} />
+              : <div className="pip-label">Shot camera ({doc.resolution.width}x{doc.resolution.height})</div>}
+            <div className="vp-info" aria-live="polite">
+              <div className="vp-title">{viewLabel}</div>
+              <div className="vp-sub">({frame}) Shot camera{selected?.ch === "position" ? ` | position key ${selected.frame}` : ""}</div>
+              {!lens && <div className="vp-pill">Rotate the scene: Alt + drag · Option + drag on Mac</div>}
+              {grabInfo && <div className="vp-sub grab">Grab{grabInfo.axis ? ` along ${grabInfo.axis.toUpperCase()}` : ""}: move the mouse. X Y Z constrain, click or Enter confirms, Esc cancels.</div>}
+              {checks.length > 0 && <ul className="checks">{checks.map((c) => <li key={c.id} className={c.level}>{c.text}</li>)}</ul>}
+            </div>
+            {npanel && (
+              <ItemPanel
+                frame={frame}
+                position={evalChannel(doc, "position", frame)}
+                aim={evalChannel(doc, "aim", frame)}
+                focalMm={focal}
+                readout={readout}
+                onPosition={(v) => edit((d) => upsertKey(d, "position", frame, snapPoint(v, { on: snap })))}
+                onAim={(v) => edit((d) => upsertKey(d, "aim", frame, v))}
+                onFocal={(mm) => edit((d) => upsertKey(d, "focal", frame, mm))}
+              />
+            )}
+            <div className="vp-hint">Middle mouse orbits · Shift+middle pans · scroll zooms · Alt+drag orbits without a middle button · G grabs a key · click an object to select it, Delete removes it · N opens Item</div>
+            {rotHere && <div className="rot-readout">recovered camera: {rotHere.rotErrDeg.toFixed(1)}° off the authored aim at frame {rotHere.frame}</div>}
+          </div>
+        </div>
+            <aside className="panel right" aria-label="Lens and scene">
           <section>
             <h3>Lens</h3>
             <label>
@@ -430,12 +568,14 @@ export function App() {
               </select>
             </label>
             <button onClick={doAddModel}>Add glTF / GLB...</button>
-            {modelNodes(doc).filter((n) => n.id !== "set").map((n) => (
-              <div key={n.id} className="row modelrow">
-                <span className="mono">{n.id}</span>
-                <button onClick={() => edit((d) => removeNode(d, n.id))}>Remove</button>
-              </div>
-            ))}
+            <ObjectPanel
+              nodes={editableNodes(doc)} selectedId={selNode} mode={tmode}
+              canRemove={selNode !== null && canRemoveNode(selNode)} canDuplicate={selNode !== null && canRemoveNode(selNode)}
+              onSelect={(id) => { setSelNode(id); if (id) setSelected(null); }} onMode={setTmode}
+              onChange={(id, patch) => edit((d) => updateNode(d, id, patch))}
+              onDuplicate={(id) => edit((d) => { const r = duplicateNode(d, id); if (r) setSelNode(r.id); return r?.doc ?? d; })}
+              onRemove={(id) => { edit((d) => removeNode(d, id)); setSelNode(null); }}
+            />
             <p className="hint">Models stay in the depth guide the server renders for the takes, so keep them under 200k triangles.</p>
           </section>
           <section>
@@ -446,92 +586,6 @@ export function App() {
             <label><input type="checkbox" checked={showPip} onChange={(e) => setShowPip(e.target.checked)} /> Camera view</label>
           </section>
             </aside>
-        <div className="vp-col">
-          <div className="vp-header" role="toolbar" aria-label="Viewport">
-            <div className="seg2" title="Editor view, or look through the shot camera (0)">
-              <button type="button" className={!lens ? "on" : ""} onClick={() => setLens(false)}>Editor</button>
-              <button type="button" className={lens ? "on" : ""} onClick={() => setLens(true)}>Camera</button>
-            </div>
-            <Menu label="View" title="Standard views (1 front, 3 right, 7 top; Shift for the opposite side)">
-              <MenuItem label="Front" keys="1" onClick={() => viewTo("front")} />
-              <MenuItem label="Back" keys="Shift 1" onClick={() => viewTo("back")} />
-              <MenuItem label="Right" keys="3" onClick={() => viewTo("side")} />
-              <MenuItem label="Left" keys="Shift 3" onClick={() => viewTo("left")} />
-              <MenuItem label="Top" keys="7" onClick={() => viewTo("top")} />
-              <MenuItem label="Bottom" keys="Shift 7" onClick={() => viewTo("bottom")} />
-              <hr />
-              <MenuItem label={ortho ? "Switch to perspective" : "Switch to orthographic"} keys="5" onClick={() => { if (!lens) { setOrtho((o) => !o); setOrthoAuto(false); } }} />
-              <MenuItem label="Camera view" keys="0" onClick={() => setLens((v) => !v)} />
-              <hr />
-              <MenuItem label="Frame all" keys="Home" onClick={() => { setLens(false); sendView("frame"); }} />
-              <MenuItem label="Frame selected key" keys="." onClick={frameSelected} />
-            </Menu>
-            <div className="seg2" title="Viewport shading (D or Z). Depth shows what the model's depth guide contains.">
-              <button type="button" className={!depth ? "on" : ""} onClick={() => setDepth(false)}>Solid</button>
-              <button type="button" className={depth ? "on" : ""} onClick={() => setDepth(true)}>Depth</button>
-            </div>
-            <Menu label="Overlays">
-              {([["grid", "Grid"], ["frustum", "Camera frustum"], ["path", "Camera path and keys"], ["ghosts", "Ghost cameras (every 20 frames)"]] as const).map(([k, label]) => (
-                <label key={k} className="mi chk"><input type="checkbox" checked={overlays[k]} onChange={(e) => setOverlays({ ...overlays, [k]: e.target.checked })} /> {label}</label>
-              ))}
-              <label className="mi chk"><input type="checkbox" checked={guides} onChange={(e) => setGuides(e.target.checked)} /> Composition guides (camera view)</label>
-              <label className="mi chk"><input type="checkbox" checked={showPip} onChange={(e) => setShowPip(e.target.checked)} /> Shot camera inset</label>
-            </Menu>
-            <label title="Snap dragged points to 0.25 m and keep them above the ground"><input type="checkbox" checked={snap} onChange={(e) => setSnap(e.target.checked)} /> Snap</label>
-            <span className="spacer" />
-            <button type="button" className={npanel ? "on" : ""} onClick={() => setNpanel((v) => !v)} title="Numbers for the shot camera at this frame (N)">Item</button>
-          </div>
-          <div className="viewport">
-            <Viewport
-              doc={doc}
-              frame={frame}
-              poses={poses}
-              recovered={recovered}
-              gizmo={gizmo}
-              showPip={showPip}
-              lens={lens}
-              ortho={ortho}
-              shading={depth ? "depth" : "solid"}
-              overlays={overlays}
-              viewCmd={viewCmd}
-              framing={framing}
-              snap={snap}
-              grab={grab}
-              onGrabPreview={(i) => setGrabInfo(i ? { axis: i.axis } : null)}
-              onGrabEnd={(f, pos) => { setGrab(null); setGrabInfo(null); if (pos) edit((d) => upsertKey(d, "position", f, pos)); }}
-              onUserOrbit={() => { if (orthoAuto) { setOrtho(false); setOrthoAuto(false); } }}
-              onViewLabel={setViewLabel}
-              selectedKeyFrame={selected?.ch === "position" ? selected.frame : null}
-              onSelectKey={(f) => setSelected({ ch: "position", frame: f })}
-              onKeyMove={(f, v) => edit((d) => upsertKey(d, "position", f, snapPoint(v, { on: snap })))}
-              onGizmoCommit={(target, value) => edit((d) => upsertKey(d, target, frame, snapPoint(value, { on: snap })))}
-              onAssetError={(m) => setMessages([m])}
-            />
-            {lens
-              ? <LensOverlay aspect={doc.resolution.width / doc.resolution.height} resolution={doc.resolution} frame={frame} focalMm={focal} guides={guides} depth={depth} image={depthImg} />
-              : <div className="pip-label">Shot camera ({doc.resolution.width}x{doc.resolution.height})</div>}
-            <div className="vp-info" aria-live="polite">
-              <div className="vp-title">{viewLabel}</div>
-              <div className="vp-sub">({frame}) Shot camera{selected?.ch === "position" ? ` | position key ${selected.frame}` : ""}</div>
-              {grabInfo && <div className="vp-sub grab">Grab{grabInfo.axis ? ` along ${grabInfo.axis.toUpperCase()}` : ""}: move the mouse. X Y Z constrain, click or Enter confirms, Esc cancels.</div>}
-              {checks.length > 0 && <ul className="checks">{checks.map((c) => <li key={c.id} className={c.level}>{c.text}</li>)}</ul>}
-            </div>
-            {npanel && (
-              <ItemPanel
-                frame={frame}
-                position={evalChannel(doc, "position", frame)}
-                aim={evalChannel(doc, "aim", frame)}
-                focalMm={focal}
-                readout={readout}
-                onPosition={(v) => edit((d) => upsertKey(d, "position", frame, snapPoint(v, { on: snap })))}
-                onAim={(v) => edit((d) => upsertKey(d, "aim", frame, v))}
-                onFocal={(mm) => edit((d) => upsertKey(d, "focal", frame, mm))}
-              />
-            )}
-            <div className="vp-hint">Middle mouse orbits · Shift+middle pans · scroll zooms · Alt+drag orbits without a middle button · G grabs a key · N opens Item</div>
-            {rotHere && <div className="rot-readout">recovered camera: {rotHere.rotErrDeg.toFixed(1)}° off the authored aim at frame {rotHere.frame}</div>}
-          </div>
-        </div>
           </main>
         <Timeline
           doc={doc}
@@ -567,7 +621,7 @@ export function App() {
         />
       )}
       {page === "review" && (goReview ? (
-        <Review run={run} seed={reviewSeed ?? run.takes[0]!.seed} onSeed={setReviewSeed} onClose={() => goPage("generate")} onRepair={repair} repairCredits={repairCredits} />
+        <Review run={run} seed={reviewSeed ?? run.takes[0]!.seed} onSeed={setReviewSeed} onClose={() => goPage("generate")} onRepair={repair} repairCredits={repairCredits} upscaleCredits={upscaleCredits} onUpscale={upscale} />
       ) : (
         <div className="page">
           <header className="pagehead"><span className="blurb">Compare each take with the move</span></header>

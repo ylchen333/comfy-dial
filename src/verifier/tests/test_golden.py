@@ -10,7 +10,7 @@ from pathlib import Path
 
 import numpy as np
 import pytest
-from comfy_osh_contracts import ScoreReport, Shot
+from comfy_dial_contracts import ScoreReport, Shot
 
 from verifier.geom import qmul, qnormalize, qslerp
 from verifier.sampler import sample_shot
@@ -53,7 +53,7 @@ def to_world(pos, quat, fov, step=1):
         }
         for i in range(0, len(pos), step)
     ]
-    return {"schema": "comfy-osh/poses/1", "fps": 25, "image": {"width": 448, "height": 252}, "solve_ok": True, "frames": frames}
+    return {"schema": "comfy-dial/poses/1", "fps": 25, "image": {"width": 448, "height": 252}, "solve_ok": True, "frames": frames}
 
 
 def perturb(kind, pos, quat, fov):
@@ -159,7 +159,7 @@ def test_fov_gate_can_be_disabled():
 
 def test_solve_failed_is_worst_not_dropped():
     shot = load("push_in")
-    r = score(shot, {"schema": "comfy-osh/poses/1", "fps": 25, "image": {"width": 8, "height": 8}, "solve_ok": False, "frames": []}, "c")
+    r = score(shot, {"schema": "comfy-dial/poses/1", "fps": 25, "image": {"width": 8, "height": 8}, "solve_ok": False, "frames": []}, "c")
     assert not r.solveOk and not r.passed and r.composite is None and r.rotErrDeg is None
     ScoreReport.model_validate(r.model_dump(by_alias=True))
     nan = to_world(*sample_shot(shot))

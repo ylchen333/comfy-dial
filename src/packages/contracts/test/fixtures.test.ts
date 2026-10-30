@@ -21,7 +21,7 @@ const schemaFile: Record<ContractName, string> = {
 const ajv = new Ajv2020({ strict: true, allErrors: true });
 for (const f of readdirSync(join(root, "schema"))) ajv.addSchema(readJson("schema", f) as object);
 const jsonSchema = (name: ContractName) => {
-  const id = `https://comfy-osh.dev/schema/${schemaFile[name]}`;
+  const id = `https://comfy-dial.dev/schema/${schemaFile[name]}`;
   const validate = ajv.getSchema(id);
   if (!validate) throw new Error(`schema not loaded: ${id}`);
   return validate;

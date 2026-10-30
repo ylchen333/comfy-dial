@@ -3,8 +3,8 @@ import { spawn } from "node:child_process";
 import { createHash } from "node:crypto";
 import { existsSync, mkdirSync, readFileSync, readdirSync, renameSync } from "node:fs";
 import { join, resolve } from "node:path";
-import type { Shot } from "@comfy-osh/contracts";
-import { DEFAULT_DEPTH_NORM, renderClip, sampleShot } from "@comfy-osh/rig-core";
+import type { Shot } from "@comfy-dial/contracts";
+import { DEFAULT_DEPTH_NORM, renderClip, sampleShot } from "@comfy-dial/rig-core";
 import { AssetStore, hasMeshNodes } from "./assets.ts";
 import { SRC_DIR } from "./tools.ts";
 

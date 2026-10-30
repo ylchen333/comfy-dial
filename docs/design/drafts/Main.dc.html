@@ -1,0 +1,290 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>Author room</title>
+<script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Instrument+Serif&amp;family=Pixelify+Sans:wght@400;500;700&amp;family=VT323&amp;display=swap">
+<style>
+body{margin:0;background:#e4e3dd}
+*{box-sizing:border-box}
+.app{position:relative;z-index:0;min-height:100vh;color:#141414;font:400 14px/1.4 "Pixelify Sans",monospace;background-color:#ecebe5;background-image:radial-gradient(rgba(20,20,20,.07) 1px,transparent 1.3px);background-size:6px 6px}
+.num{font-family:VT323,monospace}
+.serif{font-family:"Instrument Serif",serif;font-weight:400}
+.box{position:relative;background:#f7f6f1;border:1px solid #141414}
+.box.dbl{border:4px double #141414}
+.mis::before{content:"";position:absolute;inset:7px -7px -7px 7px;border:1px solid #8f9bb0;z-index:-1;pointer-events:none}
+.bar{display:flex;align-items:center;gap:10px;padding:6px 10px;border-bottom:1px solid #141414;font:700 12px "Pixelify Sans";letter-spacing:.08em;text-transform:uppercase}
+.bar .rule{flex:1;height:9px;background:repeating-linear-gradient(180deg,#141414 0 1px,transparent 1px 3px)}
+.bar .x{font:18px/1 VT323,monospace;border:1px solid #141414;padding:0 4px}
+.hint{font-size:12.5px;color:#3a3a3a;margin:0}
+.lbl{font-size:12px;letter-spacing:.06em;text-transform:uppercase;margin:0}
+.btn{appearance:none;min-height:44px;padding:0 16px;border:1px solid #141414;background:#faf9f4;color:#141414;font:500 14px "Pixelify Sans",monospace;box-shadow:3px 3px 0 #141414;cursor:pointer;display:inline-flex;align-items:center;justify-content:center;gap:8px;text-decoration:none;white-space:nowrap}
+.btn:hover{background:#141414;color:#faf9f4}
+.btn:active{transform:translate(3px,3px);box-shadow:none}
+.btn.on{background:#141414;color:#faf9f4}
+.btn.sig{background:#e2552b}
+.btn.sig:hover{background:#141414;color:#ff8a5c}
+.btn:disabled{opacity:.4;box-shadow:none;cursor:default;background:#faf9f4;color:#141414}
+.btn:focus-visible,.room:focus-visible,.tile:focus-visible,.key:focus-visible,.wire:focus-visible{outline:2px dashed #2f4fd8;outline-offset:4px}
+.room{display:inline-flex;align-items:center;min-height:48px;padding:0 14px;font:400 34px/1 "Instrument Serif",serif;color:#141414;text-decoration:none;border:1px solid transparent}
+.room:hover{border-color:#141414}
+.room.on{background:#141414;color:#f7f6f1}
+.chk{display:inline-block;width:26px;height:26px;border:1px solid #141414;background:repeating-conic-gradient(#141414 0 25%,transparent 0 50%) 0 0/8px 8px}
+.screen{position:relative;overflow:hidden;background:linear-gradient(180deg,#05070d 0%,#0b1020 48%,#2f4fd8 100%)}
+.screen::after{content:"";position:absolute;inset:0;background:repeating-linear-gradient(180deg,rgba(255,255,255,.035) 0 1px,transparent 1px 3px);pointer-events:none}
+.tile{appearance:none;border:0;padding:0;background:none;cursor:pointer;display:flex;flex-direction:column;gap:6px;font:500 12px "Pixelify Sans";color:#141414;text-transform:uppercase;letter-spacing:.05em}
+.tile .th{position:relative;width:104px;height:66px;border:1px solid #141414;overflow:hidden;background:linear-gradient(180deg,#05070d,#0b1020 55%,#2f4fd8)}
+.tile .cap{display:flex;gap:6px;align-items:center;padding:2px 4px;border:1px solid transparent}
+.tile:hover .th{outline:1px solid #141414;outline-offset:3px}
+.tile.on .th{outline:4px double #141414;outline-offset:3px}
+.tile.on .cap{background:#141414;color:#f7f6f1}
+.wire{appearance:none;border:1px solid #141414;padding:0;width:136px;height:136px;border-radius:50%;background:#faf9f4;cursor:grab;position:relative;box-shadow:4px 4px 0 #141414}
+.wire svg{position:absolute;inset:0;width:100%;height:100%}
+.wire:hover svg{animation:spin 4s steps(24) infinite}
+.wire:active{transform:translate(4px,4px);box-shadow:none;cursor:grabbing}
+@keyframes spin{to{transform:rotate(360deg)}}
+.key{appearance:none;width:44px;height:44px;border:1px solid #141414;background:#faf9f4;color:#141414;font:20px/1 VT323,monospace;cursor:pointer;display:grid;place-items:center;box-shadow:2px 2px 0 #141414}
+.key:hover{background:#141414;color:#faf9f4}
+.key:active{transform:translate(2px,2px);box-shadow:none}
+.key.on{background:#141414;color:#faf9f4}
+.ruler{position:relative;height:26px;border:1px solid #141414;background:#faf9f4}
+.ruler::after{content:"";position:absolute;inset:0;background:repeating-linear-gradient(90deg,#141414 0 1px,transparent 1px 4.1667%);-webkit-mask:linear-gradient(180deg,transparent 60%,#000 60%);mask:linear-gradient(180deg,transparent 60%,#000 60%)}
+.ruler span{position:absolute;top:1px;transform:translateX(-50%);font:16px/1 VT323,monospace}
+.lane{position:relative;height:34px;border:1px dashed #141414;background:rgba(250,249,244,.7)}
+.kf{appearance:none;border:1px solid #141414;padding:0;position:absolute;top:50%;width:14px;height:14px;transform:translate(-50%,-50%) rotate(45deg);background:#141414;cursor:pointer}
+.kf:hover{background:#ffd23f}
+.kf:focus-visible{outline:2px dashed #2f4fd8;outline-offset:3px}
+.ph{position:absolute;top:-5px;bottom:-5px;width:2px;margin-left:-1px;background:#2f4fd8;pointer-events:none}
+.field{display:flex;flex-direction:column;gap:6px;font-size:12px;letter-spacing:.06em;text-transform:uppercase}
+.sel{position:relative}
+.sel::after{content:"▼";position:absolute;right:12px;top:50%;transform:translateY(-50%);font-size:10px;pointer-events:none}
+.sel select{appearance:none;width:100%;min-height:44px;padding:0 32px 0 12px;border:1px solid #141414;background:#faf9f4;color:#141414;font:400 14px "Pixelify Sans",monospace;border-radius:0;text-transform:none;letter-spacing:0}
+.rng{-webkit-appearance:none;appearance:none;width:100%;height:44px;background:transparent;cursor:pointer;margin:0}
+.rng::-webkit-slider-runnable-track{height:12px;border:1px solid #141414;background:repeating-linear-gradient(90deg,#141414 0 1px,#faf9f4 1px 10px)}
+.rng::-webkit-slider-thumb{-webkit-appearance:none;width:16px;height:30px;margin-top:-10px;background:#141414;border:0}
+.rng::-moz-range-track{height:12px;border:1px solid #141414;background:#faf9f4}
+.rng::-moz-range-thumb{width:16px;height:30px;background:#141414;border:0;border-radius:0}
+.dial{position:relative;width:118px;height:118px;border-radius:50%;border:1px solid #141414;background:repeating-conic-gradient(from 0deg,#141414 0 1deg,transparent 1deg 10deg)}
+.dial .face{position:absolute;inset:12px;border-radius:50%;border:1px solid #141414;background:#faf9f4}
+.dial .ptr{position:absolute;left:calc(50% - 1px);top:6px;width:2px;height:40px;background:#141414;transform-origin:50% 41px}
+@media (prefers-reduced-motion:reduce){*{animation:none!important;transition:none!important}}
+</style>
+</helmet>
+<div class="app" style="display: flex; flex-direction: column">
+<header style="display: flex; flex-wrap: wrap; align-items: center; gap: 14px 22px; padding: 14px 22px; border-bottom: 4px double #141414">
+<span class="chk" aria-hidden="true"></span>
+<span class="serif" style="font-size: 50px; line-height: .9; letter-spacing: -.01em">ComfyDial</span>
+<nav aria-label="Rooms" style="display: flex; flex-wrap: wrap; gap: 6px; margin-left: 8px">
+<a class="room on" href="Main.dc.html" aria-current="page">Author</a>
+<a class="room" href="Generate.dc.html">Generate</a>
+<a class="room" href="Review.dc.html">Review</a>
+</nav>
+<span style="flex: 1"></span>
+<span class="box" style="padding: 6px 10px; font-size: 13px">[ push_in ]</span>
+<span class="box" style="padding: 6px 10px; font-size: 13px">[ no run yet ]</span>
+</header>
+
+<div style="display: flex; flex-wrap: wrap; gap: 22px; padding: 22px; align-items: flex-start">
+
+<aside class="box mis" aria-label="View controls" style="flex: 1 1 200px; max-width: 232px">
+<div class="bar"><span>View</span><span class="rule"></span><span class="x" aria-hidden="true">x</span></div>
+<div style="padding: 18px 16px; display: flex; flex-direction: column; align-items: center; gap: 14px">
+<button class="wire" type="button" aria-label="Orbit the editor view: drag the sphere">
+<svg viewBox="0 0 136 136" aria-hidden="true"><g fill="none" stroke="#141414" stroke-width="1"><ellipse cx="68" cy="68" rx="66" ry="22" stroke-dasharray="3 3"></ellipse><ellipse cx="68" cy="68" rx="66" ry="46"></ellipse><ellipse cx="68" cy="68" rx="22" ry="66" stroke-dasharray="3 3"></ellipse><ellipse cx="68" cy="68" rx="46" ry="66"></ellipse><line x1="2" y1="68" x2="134" y2="68"></line><line x1="68" y1="2" x2="68" y2="134"></line></g><rect x="62" y="62" width="12" height="12" fill="#141414"></rect></svg>
+</button>
+<p class="lbl">Orbit</p>
+<p class="hint" style="text-align: center">Rotate the scene: <b>Alt + drag</b><br>(<b>Option + drag</b> on Mac)</p>
+<div style="display: grid; grid-template-columns: repeat(3, 44px); grid-template-rows: repeat(3, 44px); gap: 4px; place-items: center; margin-top: 4px">
+<span></span><button class="key" type="button" aria-label="Pan up">▲</button><span></span>
+<button class="key" type="button" aria-label="Pan left">◀</button><span class="chk" aria-hidden="true" style="width: 20px; height: 20px; background-size: 6px 6px"></span><button class="key" type="button" aria-label="Pan right">▶</button>
+<span></span><button class="key" type="button" aria-label="Pan down">▼</button><span></span>
+</div>
+<p class="lbl">Pan</p>
+<div style="display: flex; gap: 8px; align-items: center">
+<button class="key" type="button" aria-label="Zoom out">−</button>
+<span class="lbl">Zoom</span>
+<button class="key" type="button" aria-label="Zoom in">+</button>
+</div>
+<div role="group" aria-label="Views" style="display: flex; gap: 6px; margin-top: 4px">
+<button class="key" type="button" aria-label="Front view">F</button>
+<button class="key" type="button" aria-label="Right view">R</button>
+<button class="key" type="button" aria-label="Top view">T</button>
+<button class="{{camKeyCls}}" type="button" aria-label="Shot camera view" onClick="{{toCamera}}">C</button>
+</div>
+<div style="align-self: stretch; border-top: 1px dashed #141414; padding-top: 12px; display: flex; flex-direction: column">
+<span class="lbl">■ Shot valid</span>
+<span class="num" style="font-size: 30px; line-height: 1">00:02.40 · F060</span>
+</div>
+</div>
+</aside>
+
+<main style="flex: 999 1 560px; min-width: 0; display: flex; flex-direction: column; gap: 22px">
+
+<section class="box" aria-label="Camera moves">
+<div class="bar"><span>Moves</span><span class="rule"></span><span>pick one, then edit its keys</span></div>
+<div style="padding: 14px 16px; display: flex; flex-wrap: wrap; align-items: flex-end; gap: 16px">
+<sc-for list="{{presets}}" as="p" hint-placeholder-count="5">
+<button class="{{p.cls}}" type="button" onClick="{{p.pick}}" aria-pressed="{{p.pressed}}">
+<span class="th"><svg width="104" height="66" viewBox="0 0 104 66" aria-hidden="true" style="position: absolute; inset: 0"><path d="{{p.glyph}}" fill="none" stroke="#ffd23f" stroke-width="2" stroke-linecap="square"></path><rect x="{{p.fx}}" y="24" width="6" height="18" fill="#d9dce6"></rect></svg></span>
+<span class="cap"><span class="num" style="font-size: 16px">[{{p.n}}]</span>{{p.label}}</span>
+</button>
+</sc-for>
+<span style="flex: 1"></span>
+<button class="btn" type="button">Match a camera from a video…</button>
+</div>
+</section>
+
+<section class="box dbl mis" aria-label="Viewport">
+<div class="bar"><span>Viewport</span><span class="rule"></span>
+<div role="group" aria-label="View" style="display: flex; gap: 6px; text-transform: none; letter-spacing: 0">
+<button class="{{editorCls}}" type="button" onClick="{{toEditor}}" style="min-height: 32px; box-shadow: 2px 2px 0 #141414">Editor</button>
+<button class="{{cameraCls}}" type="button" onClick="{{toCamera}}" style="min-height: 32px; box-shadow: 2px 2px 0 #141414">Camera</button>
+</div>
+<div role="group" aria-label="Shading" style="display: flex; gap: 6px; text-transform: none; letter-spacing: 0">
+<button class="btn on" type="button" style="min-height: 32px; box-shadow: 2px 2px 0 #141414">Solid</button>
+<button class="btn" type="button" style="min-height: 32px; box-shadow: 2px 2px 0 #141414">Depth</button>
+</div>
+<span class="rule"></span>
+<button class="btn" type="button" style="min-height: 32px; box-shadow: 2px 2px 0 #141414; text-transform: none">Undo</button>
+<button class="btn" type="button" disabled style="min-height: 32px; text-transform: none">Redo</button>
+</div>
+<div class="screen" style="height: 440px">
+<sc-if value="{{isEditor}}" hint-placeholder-val="{{ true }}">
+<svg viewBox="0 0 960 440" preserveAspectRatio="xMidYMid slice" role="img" aria-label="Editor view: the authored push-in path in yellow ends near the mannequin; the recovered path in cyan follows it closely" style="position: absolute; inset: 0; width: 100%; height: 100%">
+<g stroke="rgba(217,220,230,.22)" stroke-width="1">
+<line x1="480" y1="170" x2="-600" y2="440"></line><line x1="480" y1="170" x2="-240" y2="440"></line><line x1="480" y1="170" x2="120" y2="440"></line><line x1="480" y1="170" x2="480" y2="440"></line><line x1="480" y1="170" x2="840" y2="440"></line><line x1="480" y1="170" x2="1200" y2="440"></line><line x1="480" y1="170" x2="1560" y2="440"></line>
+<line x1="0" y1="184" x2="960" y2="184"></line><line x1="0" y1="206" x2="960" y2="206"></line><line x1="0" y1="240" x2="960" y2="240"></line><line x1="0" y1="292" x2="960" y2="292"></line><line x1="0" y1="364" x2="960" y2="364"></line>
+</g>
+<g fill="#d9dce6"><rect x="550" y="182" width="22" height="22"></rect><rect x="546" y="208" width="30" height="62"></rect><rect x="548" y="270" width="10" height="40"></rect><rect x="562" y="270" width="10" height="40"></rect></g>
+<path d="M150 400 C 250 352, 360 296, 470 258" fill="none" stroke="#3fd2ff" stroke-width="2" stroke-dasharray="6 6"></path>
+<path d="M140 408 C 245 354, 355 292, 465 248" fill="none" stroke="#ffd23f" stroke-width="2.5"></path>
+<g fill="#ffd23f"><rect x="134" y="402" width="12" height="12" transform="rotate(45 140 408)"></rect><rect x="297" y="314" width="12" height="12" transform="rotate(45 303 320)"></rect><rect x="459" y="242" width="12" height="12" transform="rotate(45 465 248)"></rect></g>
+<g fill="none" stroke="#f7f6f1" stroke-width="1"><path d="M303 320 L 350 286 L 356 308 Z"></path><line x1="303" y1="320" x2="540" y2="226" stroke-dasharray="2 5"></line></g>
+</svg>
+<div style="position: absolute; left: 14px; top: 12px; display: flex; flex-direction: column; gap: 6px; z-index: 1">
+<span style="font-size: 13px; color: #f7f6f1; letter-spacing: .08em; text-transform: uppercase">User perspective</span>
+<span class="num" style="font-size: 18px; color: #d9dce6">(60) shot camera · position key 60</span>
+<span style="align-self: flex-start; font-size: 12.5px; color: #141414; background: #f7f6f1; border: 1px solid #141414; padding: 4px 10px">Rotate the scene: Alt + drag · Option + drag on Mac</span>
+</div>
+<div style="position: absolute; right: 14px; top: 14px; width: 210px; height: 140px; border: 1px solid #f7f6f1; overflow: hidden; z-index: 1">
+<div aria-hidden="true" style="position: absolute; inset: 0; background: linear-gradient(180deg, #050505 0%, #1b1b1b 55%, #5a5a5a 100%)"></div>
+<div aria-hidden="true" style="position: absolute; left: 92px; top: 30px; width: 30px; height: 30px; border-radius: 50%; background: #b8b8b8"></div>
+<div aria-hidden="true" style="position: absolute; left: 88px; top: 58px; width: 38px; height: 70px; border-radius: 16px; background: #a6a6a6"></div>
+<span class="num" style="position: absolute; left: 8px; bottom: 4px; font-size: 16px; color: #f0f0f0">SHOT CAM 768×512</span>
+</div>
+<div style="position: absolute; left: 14px; bottom: 10px; display: flex; flex-wrap: wrap; gap: 14px; align-items: center; color: #f7f6f1; z-index: 1">
+<span style="display: inline-flex; align-items: center; gap: 6px; font-size: 12px"><i aria-hidden="true" style="width: 18px; height: 2px; background: #ffd23f; display: inline-block"></i>authored</span>
+<span style="display: inline-flex; align-items: center; gap: 6px; font-size: 12px"><i aria-hidden="true" style="width: 18px; border-top: 2px dashed #3fd2ff; display: inline-block"></i>recovered</span>
+<span class="num" style="font-size: 18px; color: #bfefff">recovered: 0.9° off the authored aim at f60</span>
+</div>
+</sc-if>
+<sc-if value="{{isCamera}}" hint-placeholder-val="{{ false }}">
+<div aria-hidden="true" style="position: absolute; inset: 0; background: linear-gradient(180deg, #050505 0%, #1d1d1d 55%, #646464 100%)"></div>
+<div aria-hidden="true" style="position: absolute; left: calc(50% - 50px); top: 80px; width: 100px; height: 100px; border-radius: 50%; background: #c2c2c2"></div>
+<div aria-hidden="true" style="position: absolute; left: calc(50% - 62px); top: 172px; width: 124px; height: 240px; border-radius: 56px; background: #ababab"></div>
+<div aria-hidden="true" style="position: absolute; inset: 0; background-image: linear-gradient(90deg, transparent 33.2%, rgba(255,255,255,.3) 33.2% 33.4%, transparent 33.4% 66.6%, rgba(255,255,255,.3) 66.6% 66.8%, transparent 66.8%), linear-gradient(180deg, transparent 33.2%, rgba(255,255,255,.3) 33.2% 33.4%, transparent 33.4% 66.6%, rgba(255,255,255,.3) 66.6% 66.8%, transparent 66.8%)"></div>
+<div style="position: absolute; left: 14px; top: 12px; display: flex; flex-direction: column; z-index: 1">
+<span style="font-size: 13px; color: #f7f6f1; letter-spacing: .08em; text-transform: uppercase">Through the lens</span>
+<span class="num" style="font-size: 18px; color: #e8e8e8">(60) 35 mm · 768×512 · depth guide preview</span>
+</div>
+</sc-if>
+</div>
+</section>
+
+<section class="box" aria-label="Timeline">
+<div class="bar"><span>Timeline</span><span class="rule"></span><span class="num" style="font-size: 18px; letter-spacing: 0">121 F · 25 FPS</span></div>
+<div style="padding: 14px 16px; display: flex; flex-direction: column; gap: 10px">
+<div style="display: flex; flex-wrap: wrap; align-items: center; gap: 8px">
+<button class="key" type="button" aria-label="Previous key">⏮</button>
+<button class="key" type="button" aria-label="Step back">◀</button>
+<button class="key on" type="button" aria-label="Play">▶</button>
+<button class="key" type="button" aria-label="Step forward">▶</button>
+<button class="key" type="button" aria-label="Next key">⏭</button>
+<span class="num" style="font-size: 28px; margin-left: 10px">00:02.40</span>
+</div>
+<div style="display: grid; grid-template-columns: 76px minmax(0, 1fr); gap: 6px 12px; align-items: center">
+<span></span>
+<div class="ruler" aria-hidden="true"><span style="left: 4px; transform: none">0</span><span style="left: 20%">24</span><span style="left: 40%">48</span><span style="left: 60%">72</span><span style="left: 80%">96</span><span style="left: 100%; transform: translateX(-100%); margin-left: -4px">120</span></div>
+<span class="lbl">Position</span>
+<div class="lane"><button class="kf" type="button" aria-label="Position key, frame 0" style="left: 2%"></button><button class="kf" type="button" aria-label="Position key, frame 60" style="left: 50%"></button><button class="kf" type="button" aria-label="Position key, frame 120" style="left: 98%"></button><span class="ph" style="left: 50%"></span></div>
+<span class="lbl">Aim</span>
+<div class="lane"><button class="kf" type="button" aria-label="Aim key, frame 0" style="left: 2%"></button><button class="kf" type="button" aria-label="Aim key, frame 120" style="left: 98%"></button><span class="ph" style="left: 50%"></span></div>
+<span class="lbl">Focal</span>
+<div class="lane"><button class="kf" type="button" aria-label="Focal key, frame 0" style="left: 2%"></button><span class="ph" style="left: 50%"></span></div>
+</div>
+</div>
+</section>
+</main>
+
+<aside class="box mis" aria-label="Lens and scene" style="flex: 1 1 260px; max-width: 320px">
+<div class="bar"><span>Lens</span><span class="rule"></span><span class="x" aria-hidden="true">x</span></div>
+<div style="padding: 18px 16px; display: flex; flex-direction: column; gap: 16px">
+<div style="display: flex; align-items: center; gap: 16px">
+<div class="dial" aria-hidden="true"><div class="face"></div><div class="ptr" style="transform: rotate(-35deg)"></div></div>
+<div style="display: flex; flex-direction: column">
+<span class="num" style="font-size: 72px; line-height: .8">35</span>
+<span class="lbl">mm · 37.8° vfov</span>
+</div>
+</div>
+<label class="field">Focal length<input class="rng" type="range" min="12" max="135" value="35"></label>
+<label class="field">Sensor<span class="sel"><select><option>Super 35 (18.7 mm)</option><option>Full frame (24 mm)</option></select></span></label>
+<label class="field">Aspect<span class="sel"><select><option>3:2 (768×512)</option><option>16:9 (832×480)</option></select></span></label>
+</div>
+<div class="bar" style="border-top: 1px solid #141414"><span>Scene</span><span class="rule"></span></div>
+<div style="padding: 18px 16px; display: flex; flex-direction: column; gap: 16px">
+<label class="field">Subject<span class="sel"><select><option>Mannequin, standing</option><option>Mannequin, striding</option></select></span></label>
+<label class="field">Set<span class="sel"><select><option>Courtyard (glTF)</option><option>Street (glTF)</option></select></span></label>
+<div style="display: flex; flex-wrap: wrap; gap: 10px">
+<button class="btn" type="button">Add glTF / GLB…</button>
+<button class="btn" type="button">Generate an actor…</button>
+</div>
+<p class="hint">The depth guide carries only this shape. Your prompt says who they are and how the shot looks.</p>
+<div style="border: 1px dashed #141414; padding: 10px 12px; font-size: 13px">■ No checks raised.</div>
+<a class="btn on" href="Generate.dc.html" style="min-height: 52px; font-size: 16px">Next: Generate →</a>
+</div>
+</aside>
+</div>
+</div>
+</x-dc>
+<script type="text/x-dc" data-dc-script data-props='{"$preview":{"width":1440,"height":940}}'>
+class Component extends DCLogic {
+  constructor(props) {
+    super(props);
+    this.state = { mode: 'editor', preset: 'push_in' };
+  }
+  renderVals() {
+    const defs = [
+      { id: 'push_in', label: 'Push in', glyph: 'M10 44 L62 32 M54 26 L62 32 L55 39', fx: 78 },
+      { id: 'pull_out', label: 'Pull out', glyph: 'M62 32 L12 44 M20 37 L12 44 L21 49', fx: 78 },
+      { id: 'orbit', label: 'Orbit', glyph: 'M18 36 A34 13 0 1 0 86 36 M80 29 L86 36 L78 39', fx: 49 },
+      { id: 'pan', label: 'Pan', glyph: 'M14 52 L40 16 M14 52 L58 22 M14 52 L72 36', fx: 84 },
+      { id: 'dolly_zoom', label: 'Dolly zoom', glyph: 'M8 20 L30 32 L8 44 M38 12 L66 32 L38 52', fx: 82 }
+    ];
+    const presets = defs.map((d, i) => ({
+      ...d,
+      n: i + 1,
+      cls: this.state.preset === d.id ? 'tile on' : 'tile',
+      pressed: this.state.preset === d.id ? 'true' : 'false',
+      pick: () => this.setState({ preset: d.id })
+    }));
+    const isEditor = this.state.mode === 'editor';
+    return {
+      presets,
+      isEditor,
+      isCamera: !isEditor,
+      editorCls: isEditor ? 'btn on' : 'btn',
+      cameraCls: isEditor ? 'btn' : 'btn on',
+      camKeyCls: isEditor ? 'key' : 'key on',
+      toEditor: () => this.setState({ mode: 'editor' }),
+      toCamera: () => this.setState({ mode: 'camera' })
+    };
+  }
+}
+</script>
+</body>
+</html>

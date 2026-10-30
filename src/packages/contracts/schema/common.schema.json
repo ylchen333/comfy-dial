@@ -1,6 +1,6 @@
 {
   "$schema": "https://json-schema.org/draft/2020-12/schema",
-  "$id": "https://comfy-osh.dev/schema/common.schema.json",
+  "$id": "https://comfy-dial.dev/schema/common.schema.json",
   "title": "Common",
   "$defs": {
     "vec3": { "type": "array", "items": { "type": "number" }, "minItems": 3, "maxItems": 3 },

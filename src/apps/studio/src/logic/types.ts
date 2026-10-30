@@ -1,5 +1,5 @@
-import type { Shot } from "@comfy-osh/contracts";
-import type { Vec3 } from "@comfy-osh/rig-core";
+import type { Shot } from "@comfy-dial/contracts";
+import type { Vec3 } from "@comfy-dial/rig-core";
 
 export type Easing = "linear" | "easeIn" | "easeOut" | "easeInOut";
 export const EASINGS: readonly Easing[] = ["linear", "easeIn", "easeOut", "easeInOut"];

@@ -1,6 +1,6 @@
 // Pure keyframe store logic. Every function returns a new StudioDoc (or an error); nothing mutates.
-import { DEFAULT_FRAMES, DEFAULT_TARGET, type Vec3 } from "@comfy-osh/rig-core";
-import { isLtxFrameCount } from "@comfy-osh/contracts";
+import { DEFAULT_FRAMES, DEFAULT_TARGET, type Vec3 } from "@comfy-dial/rig-core";
+import { isLtxFrameCount } from "@comfy-dial/contracts";
 import { CHANNELS, type Channel, type ChannelValues, type Easing, type Key, type Result, type StudioDoc } from "./types.ts";
 
 export function applyEasing(e: Easing, u: number): number {

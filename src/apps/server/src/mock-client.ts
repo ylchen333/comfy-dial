@@ -3,8 +3,8 @@
 // plumbing and the verifier but are NOT measurements of any video.
 import { mkdirSync, writeFileSync } from "node:fs";
 import { basename, join } from "node:path";
-import type { Shot } from "@comfy-osh/contracts";
-import { sampleShot } from "@comfy-osh/rig-core";
+import type { Shot } from "@comfy-dial/contracts";
+import { sampleShot } from "@comfy-dial/rig-core";
 import { DuplicateKeyError, type ComfyClient, type Graph, type JobResult } from "./client.ts";
 
 type M3 = number[][];

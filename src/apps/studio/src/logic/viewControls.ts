@@ -1,5 +1,5 @@
 // Editor-view helpers (no UI): where to put the orbit camera for a named view, and snapping for dragged points.
-import type { Pose, Vec3 } from "@comfy-osh/rig-core";
+import type { Pose, Vec3 } from "@comfy-dial/rig-core";
 
 export type ViewId = "persp" | "top" | "bottom" | "front" | "back" | "side" | "left" | "frame";
 export const VIEW_LABELS: Record<Exclude<ViewId, "frame">, string> = { persp: "Persp", top: "Top", bottom: "Bottom", front: "Front", back: "Back", side: "Right", left: "Left" };

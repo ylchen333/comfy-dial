@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
-import { Shot } from "@comfy-osh/contracts";
-import { quatAngleDeg, sampleShot, focalMmToVFovDeg, type Quat, type Vec3 } from "@comfy-osh/rig-core";
+import { Shot } from "@comfy-dial/contracts";
+import { quatAngleDeg, sampleShot, focalMmToVFovDeg, type Quat, type Vec3 } from "@comfy-dial/rig-core";
 import { exportShot, poseAtFrame, TOL } from "../src/logic/compile.ts";
 import { canRedo, canUndo, commit, createHistory, redo, undo } from "../src/logic/history.ts";
 import { exportShotJson, importShotJson, parsePosesJson, validateDoc } from "../src/logic/io.ts";
@@ -186,7 +186,7 @@ describe("import / export", () => {
 
   it("parses recovered Poses and rejects failed solves", () => {
     const poses = {
-      schema: "comfy-osh/poses/1", fps: 25, image: { width: 64, height: 64 }, solve_ok: true,
+      schema: "comfy-dial/poses/1", fps: 25, image: { width: 64, height: 64 }, solve_ok: true,
       frames: [
         { index: 0, t: 0, position: [0, 0, 0], quaternion: [0, 0, 0, 1], fov_v_deg: 40 },
         { index: 1, t: 0.04, position: [0, 0, -1], quaternion: [0, 0, 0, 1], fov_v_deg: 40 },
